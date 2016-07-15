@@ -1,0 +1,519 @@
+@import url(https://fonts.googleapis.com/css?family=Droid+Sans|Droid+Sans+Mono|Open+Sans:400,600,700);
+
+/*--------------------------------------------------------------------------
+  Formatting for F# code snippets
+/*--------------------------------------------------------------------------*/
+
+/* strings --- and stlyes for other string related formats */
+span.s { color:#D4B43C; }
+/* printf formatters */
+span.pf { color:#E0C57F; }
+/* escaped chars */
+span.e { color:#EA8675; }
+/* identifiers --- and styles for more specific identifier types */
+span.i { color:#d1d1d1; }
+/* type or module */
+span.t { color:#43AEC6; }
+/* function */
+span.f { color:#e1e1e1; }
+/* DU case or active pattern */
+span.p { color:#4ec9b0; }
+/* keywords */
+span.k { color:#4e98dc; }
+/* comment */
+span.c { color:#96C71D; }
+/* operators */
+span.o { color:#af75c1; }
+/* numbers */
+span.n { color:#96C71D; }
+/* line number */
+span.l { color:#80b0b0; }
+/* mutable var or ref cell */
+span.v { color:#d1d1d1; font-weight: bold; }
+/* inactive code */
+span.inactive { color:#808080; }
+/* preprocessor */
+span.prep { color:#af75c1; }
+/* fsi output */
+span.fsi { color:#808080; }
+
+/* omitted */
+span.omitted {
+  background:#3c4e52;
+  border-radius:5px;
+  color:#808080;
+  padding:0px 0px 1px 0px;
+}
+
+/* tool tip */
+div.tip {
+  background:#475b5f;
+  border-radius:4px;
+  font:11pt 'Droid Sans', arial, sans-serif;
+  padding:6px 8px 6px 8px;
+  display:none;
+  color:#d1d1d1;
+}
+
+pre.fssnip, table.pre, pre {
+  padding:0px;
+  margin:0px;
+  border:none;
+  line-height:13pt;
+  border:0px solid #d8d8d8;
+  border-collapse:separate;
+  white-space:pre;
+  font: 9pt 'Droid Sans Mono',consolas,monospace;
+  margin:0px 0px 0px 0px;
+  background-color:#212d30;
+  padding:10px;
+  border-radius:5px;
+  color:#d1d1d1;
+  overflow: auto;
+  display: block;
+}
+
+table.pre pre {
+  padding:0px;
+  margin:0px;
+  border-radius:0px;
+  width: 100%;
+}
+
+table.pre td {
+  padding:0px;
+  white-space:normal;
+  margin:0px;
+}
+
+table.pre td.lines {
+  width:30px;
+}
+
+/*--------------------------------------------------------------------------
+  Formatting for page & standard document content
+/*--------------------------------------------------------------------------*/
+
+body {
+  font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+  padding-top: 0px;
+  padding-bottom: 40px;
+}
+
+pre {
+    word-wrap: inherit;
+}
+
+/* Format the heading - nicer spacing etc. */
+.masthead {
+  overflow: hidden;
+}
+
+.masthead .muted a {
+  text-decoration:none;
+  color:#999999;
+}
+
+.masthead ul, .masthead li {
+  margin-bottom:0px;
+}
+
+.masthead .nav li {
+  margin-top: 15px;
+  font-size:110%;
+}
+
+.masthead h3 {
+  margin-bottom:5px;
+  font-size:170%;
+}
+
+hr {
+  margin:5px 0px 20px 0px;
+}
+
+/* Make table headings and td.title bold */
+td.title, thead {
+  font-weight:bold;
+}
+
+/* a left colored bar to highlight some text */
+.highlight {
+    border-left-style: solid;
+    border-color: rgb(51, 122, 183);
+    border-width: 5px;
+    padding-left: 10px
+}
+
+/* definition list with colored bar to highlight it */
+dl {
+    border-left-style: solid;
+    border-color: rgb(51, 122, 183);
+    border-width: 5px;
+    padding-left: 10px
+}
+
+/* Format the right-side menu */
+#menu {
+  font-size:11pt;
+  padding-left:20px;
+}
+
+#menu .nav-header {
+  font-size:12pt;
+  color:#606060;
+  margin-top:20px;
+}
+
+#menu li {
+  line-height:10px;
+}
+
+#menu a {
+  line-height: 10px;
+}
+
+.nav li a {
+  padding: 10px 8px;
+}
+
+.nav li a:focus, .nav li a:hover {
+  border-left: 3px solid #245596;
+  background-color: #fff;
+}
+
+/* Change font sizes for headings etc. */
+/* blue alea color from logo: rgb(45, 91, 161), hex: #2D5BA1; */
+h1 { font-size: 24pt; margin:10px 0px 15px 0px; font-weight:400; color:rgb(51, 122, 183);} /*Hex of 51, 122, 183: #337AB7*/
+h2 { font-size: 18pt; margin:20px 0px 0px 0px; font-weight:400; color:rgb(51, 122, 183);}
+h3 { font-size: 14pt; font-weight:400; color:rgb(51, 122, 183);}
+h4 { font-size: 15px; margin-top: 20px; font-weight: bold; color: #666666; }
+p  { font-size: 11pt; margin:5px 0px 15px 0px; }
+ul { font-size: 11pt; margin-top:10px; }
+li { font-size: 11pt; margin: 5px 0px 5px 0px; }
+strong { font-weight:700; }
+
+table {
+  border-collapse: collapse;
+  border-top: 0.5pt solid;
+  border-bottom: 0.5pt solid;
+  border-left: 0.5pt solid;
+  border-right: 0.5pt solid;
+}
+table th {
+  padding-left: 5px;
+}
+table tr {
+  line-height: 2.2;
+}
+table tr:nth-child(odd) {
+background-color:#F5F5F5;
+}
+table tr:nth-child(even) {
+background-color:#FFFFFF;
+}
+
+/*--------------------------------------------------------------------------
+  Formatting for API reference
+/*--------------------------------------------------------------------------*/
+
+.type-list .type-name, .module-list .module-name {
+  width:25%;
+  font-weight:bold;
+}
+
+.member-list .member-name {
+  width:35%;
+}
+
+#main .xmldoc h2 {
+  font-size:14pt;
+  margin:10px 0px 0px 0px;
+}
+
+#main .xmldoc h3 {
+  font-size:12pt;
+  margin:10px 0px 0px 0px;
+}
+
+.github-link {
+  float:right;
+  text-decoration:none;
+}
+
+.github-link img {
+  border-style:none;
+  margin-left:10px;
+}
+
+.github-link .hover { display:none; }
+.github-link:hover .hover { display:block; }
+.github-link .normal { display: block; }
+.github-link:hover .normal { display: none; }
+
+/*--------------------------------------------------------------------------
+  Links
+/*--------------------------------------------------------------------------*/
+
+h1 a, h1 a:hover, h1 a:focus,
+h2 a, h2 a:hover, h2 a:focus,
+h3 a, h3 a:hover, h3 a:focus,
+h4 a, h4 a:hover, h4 a:focus,
+h5 a, h5 a:hover, h5 a:focus,
+h6 a, h6 a:hover, h6 a:focus { color : inherit; text-decoration : inherit; outline:none }
+
+/*--------------------------------------------------------------------------
+  Additional formatting
+/*--------------------------------------------------------------------------*/
+
+#nuget {
+  margin-top:20px;
+  font-size: 11pt;
+  padding:20px;
+}
+
+#nuget pre {
+  font-size:11pt;
+  -moz-border-radius: 0px;
+  -webkit-border-radius: 0px;
+  border-radius: 0px;
+  background: #404040;
+  border-style:none;
+  color: #e0e0e0;
+  margin-top:15px;
+}
+
+#wrapper {
+  display: none;
+}
+
+.san_logo{
+  padding-left: 16px;
+  padding-top: 6px;
+}
+
+#referenceContentInner {
+  display: flex;
+  align-content: flex-start;
+  flex-direction: row;
+  flex-wrap: wrap;
+  padding-left: 25px;
+}
+
+#referenceContent .aside {
+  min-width: 300px;
+  margin-top: 30px;
+}
+
+#referenceContent .center {
+  margin-top: 30px;
+  min-width: 300px;
+  max-width: 800px;
+  width: 60%;
+}
+
+
+#referenceContent td {
+  padding-left: 5px;
+}
+
+#inTable ul {
+  padding-left: 15px;
+}
+
+#referenceContent td {
+  padding-left: 5px;
+}
+
+/* Hide snippets on the home page snippet & nicely format table */
+#hp-snippet td.lines {
+  display: none;
+}
+#hp-snippet .table {
+  width:80%;
+  margin-left:30px;
+}
+
+#anim-holder {
+  overflow:hidden;
+  position:relative;
+  border-radius:5px;
+}
+
+.tablink-0, .tablink-1, .tablink-2 {
+  cursor:pointer;
+  border-style:none;
+  color:#f0f8ff;
+  border-radius:5px;
+  background:#415d60;
+  opacity:0.7;
+  width:50px;
+  height:23px;
+  text-align:center;
+  padding-top:0px;
+  position:absolute;
+  top:15px;
+}
+
+.tablink-0 {
+  right:140px
+}
+
+.tablink-1 {
+  right:80px
+}
+
+.tablink-2 {
+  right:20px
+}
+
+.tab-0 {
+  display:block;
+  overflow:auto;
+}
+
+.tab-1 {
+  display:none;
+}
+
+.tab-2 {
+  display:none;
+  overflow:auto;
+}
+
+#anim-holder a img {
+  min-width:800px;
+}
+
+.container-fluid table.pre, .container-fluid pre.fssnip {
+  padding:45px 10px 10px 10px;
+}
+
+.container-fluid{
+  padding: 0px 0px 0px 0px;
+}
+
+div.tab-0{
+  padding-left: 0px;
+}
+
+/* Github Ribbon*/
+#forkongithub a{
+  background:#2D5BA1;
+  color:#fff;
+  text-decoration:none;
+  font-family:arial,sans-serif;
+  text-align:center;
+  font-weight:bold;
+  padding:5px 40px;
+  font-size:1rem;
+  line-height:2rem;
+  position:relative;
+  transition:0.5s;
+}
+
+#forkongithub a:hover{
+    background:#337AB7;
+    color:#fff;
+}
+
+#forkongithub a::before,
+
+#forkongithub a::after{
+  content:"";
+  width: 100%;
+  display:block;
+  position:absolute;
+  top:1px;
+  left:0;
+  height:1px;
+  background:#fff;
+}
+
+#forkongithub a::after{
+  bottom:1px;
+  top:auto;
+ }
+ @media screen and (min-width:800px){
+
+   #forkongithub{
+     position:absolute;
+     display:block;
+     top:-35px;
+     right:0;
+     width:200px;
+     overflow:hidden;
+     height:200px;
+     z-index:9999;
+   }
+
+   #forkongithub a{
+     width:200px;
+     position:absolute;
+     top:60px;
+     right:-60px;
+     transform:rotate(45deg);
+     -webkit-transform:rotate(45deg);
+     -ms-transform:rotate(45deg);
+     -moz-transform:rotate(45deg);
+     -o-transform:rotate(45deg);
+     box-shadow:4px 4px 10px rgba(0,0,0,0.8);
+     }
+ }
+
+img{
+  max-width:100%;
+  width:auto\9;
+  height:auto;
+  vertical-align:middle;
+  border:0;
+  -ms-interpolation-mode:bicubic;
+}
+
+/* Dropdown Button */
+.dropbtn {
+    background-color: #337AB7;
+    color: white;
+    padding: 4px;
+    font-size: 16px;
+    border: none;
+    cursor: pointer;
+    height:30px;
+    width:100px;
+}
+
+/* The container <div> - needed to position the dropdown content */
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+/* Dropdown Content (Hidden by Default) */
+.dropdown-content {
+    display: none;
+    position: absolute;
+    background-color: #f9f9f9;
+    min-width: 160px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+}
+
+/* Links inside the dropdown */
+.dropdown-content a {
+    color: black;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+}
+
+/* Change color of dropdown links on hover */
+.dropdown-content a:hover {background-color: #f1f1f1}
+
+/* Show the dropdown menu on hover */
+.dropdown:hover .dropdown-content {
+    display: block;
+}
+
+/* Change the background color of the dropdown button when the dropdown content is shown */
+.dropdown:hover .dropbtn {
+    background-color: #3e8e41;
+}

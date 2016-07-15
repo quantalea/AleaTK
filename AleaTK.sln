@@ -1,0 +1,87 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25123.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{98935CC7-9E54-4EE6-9DBF-8F7B8F180D8A}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{F3E4366D-EFB7-4C37-A970-27996CA950B0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AleaTK", "src\AleaTK\AleaTK.csproj", "{EC47C435-0D7D-4819-BE05-11B9E57FB8F3}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{A3D5657F-410D-433B-8B33-7C24D0C26CEB}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AleaTKTest", "tests\AleaTKTest\AleaTKTest.csproj", "{C45C2DCD-0CE2-495B-B805-A53A2D7FF0CE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tutorial", "tutorial", "{975ADAFF-65C8-4CB0-BA59-218433C3E89C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "generate", "generate", "{DFFDA90D-F070-4392-B241-6B69B44C3A09}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Generate", "tutorial\generate\Generate.fsproj", "{CF152E30-8B00-440C-A1DF-B6665212F8FA}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{F08825D9-3ABF-45AE-A3FF-45701A9DE4FF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MNIST", "tutorial\samples\MNIST\MNIST.csproj", "{87A9BBD7-C303-4A22-9175-74BCF148A81D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MonteCarloPi", "tutorial\samples\MonteCarloPi\MonteCarloPi.csproj", "{5F2ECB6E-7F39-4889-99C2-BBE6144CF7AC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PTB", "tutorial\samples\PTB\PTB.csproj", "{EC890853-7BCF-4C35-A714-FFB81776E433}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "root", "root", "{1B0B8104-5F02-4999-BB85-CBD75ADA21FE}"
+	ProjectSection(SolutionItems) = preProject
+		.gitattributes = .gitattributes
+		.gitignore = .gitignore
+		build.bat = build.bat
+		build.fsx = build.fsx
+		paket.dependencies = paket.dependencies
+		paket.lock = paket.lock
+		SolutionInfo.cs = SolutionInfo.cs
+		SolutionInfo.fs = SolutionInfo.fs
+		Version.fsx = Version.fsx
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{EC47C435-0D7D-4819-BE05-11B9E57FB8F3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC47C435-0D7D-4819-BE05-11B9E57FB8F3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC47C435-0D7D-4819-BE05-11B9E57FB8F3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC47C435-0D7D-4819-BE05-11B9E57FB8F3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C45C2DCD-0CE2-495B-B805-A53A2D7FF0CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C45C2DCD-0CE2-495B-B805-A53A2D7FF0CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C45C2DCD-0CE2-495B-B805-A53A2D7FF0CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C45C2DCD-0CE2-495B-B805-A53A2D7FF0CE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CF152E30-8B00-440C-A1DF-B6665212F8FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CF152E30-8B00-440C-A1DF-B6665212F8FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CF152E30-8B00-440C-A1DF-B6665212F8FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CF152E30-8B00-440C-A1DF-B6665212F8FA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{87A9BBD7-C303-4A22-9175-74BCF148A81D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{87A9BBD7-C303-4A22-9175-74BCF148A81D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{87A9BBD7-C303-4A22-9175-74BCF148A81D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{87A9BBD7-C303-4A22-9175-74BCF148A81D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5F2ECB6E-7F39-4889-99C2-BBE6144CF7AC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5F2ECB6E-7F39-4889-99C2-BBE6144CF7AC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5F2ECB6E-7F39-4889-99C2-BBE6144CF7AC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5F2ECB6E-7F39-4889-99C2-BBE6144CF7AC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EC890853-7BCF-4C35-A714-FFB81776E433}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC890853-7BCF-4C35-A714-FFB81776E433}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC890853-7BCF-4C35-A714-FFB81776E433}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC890853-7BCF-4C35-A714-FFB81776E433}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{EC47C435-0D7D-4819-BE05-11B9E57FB8F3} = {98935CC7-9E54-4EE6-9DBF-8F7B8F180D8A}
+		{C45C2DCD-0CE2-495B-B805-A53A2D7FF0CE} = {A3D5657F-410D-433B-8B33-7C24D0C26CEB}
+		{DFFDA90D-F070-4392-B241-6B69B44C3A09} = {975ADAFF-65C8-4CB0-BA59-218433C3E89C}
+		{CF152E30-8B00-440C-A1DF-B6665212F8FA} = {DFFDA90D-F070-4392-B241-6B69B44C3A09}
+		{F08825D9-3ABF-45AE-A3FF-45701A9DE4FF} = {975ADAFF-65C8-4CB0-BA59-218433C3E89C}
+		{87A9BBD7-C303-4A22-9175-74BCF148A81D} = {F08825D9-3ABF-45AE-A3FF-45701A9DE4FF}
+		{5F2ECB6E-7F39-4889-99C2-BBE6144CF7AC} = {F08825D9-3ABF-45AE-A3FF-45701A9DE4FF}
+		{EC890853-7BCF-4C35-A714-FFB81776E433} = {F08825D9-3ABF-45AE-A3FF-45701A9DE4FF}
+	EndGlobalSection
+EndGlobal

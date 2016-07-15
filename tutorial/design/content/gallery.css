@@ -1,0 +1,290 @@
+@import url(https://fonts.googleapis.com/css?family=Lato:300italic,700italic,300,400,700);
+
+html, body
+{
+    margin: 0;
+}
+
+body
+{
+    padding: 20px;
+    font-family: "Lato", Arial, Sans-Serif;
+    color: #555;
+    margin: 0 auto;
+}
+
+article
+{
+    min-height: 300px;
+    text-align: justify;
+}
+
+article p
+{
+    color: #777;
+    font-size: 15px;
+    font-weight: normal;
+    margin-top: 0;
+}
+
+article li
+{
+    margin-right: 10px;
+    margin-top: 10px;
+}
+
+article h1
+{
+    margin-top: 30px;
+    font-size: 16pt;
+}
+
+article h2
+{
+    font-size: 12pt;
+}
+
+article h3
+{
+    font-size: 10pt;
+}
+
+article .video
+{
+    text-align: center;
+}
+
+article .navigation li
+{
+    margin-right: 20px;
+    margin-top: 2px;
+}
+
+article table
+{
+    display: block;
+    margin-left: 20px;
+    margin-right: auto;
+    margin-bottom: 10px;
+}
+
+article img
+{
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+    margin-bottom: 10px;
+}
+
+article .fixed
+{
+    max-width: 800px;
+}
+
+#samples
+{
+    max-width: 1200px;
+}
+
+#samples h1
+{
+    clear: both;
+    width: 100%;
+}
+
+#samples section
+{
+    display: -webkit-box; /* iOS 6-, Safari 3.1-6 */
+    display: -moz-box; /* Firefox 19- */
+    display: -ms-flexbox; /* IE 10 */
+    display: -webkit-flex; /* Chrome */
+    display: flex; /* Opera 12.1, Firefox 20+ */ /* iOS 6-, Safari 3.1-6 */
+    -webkit-box-orient: horizontal;
+    -webkit-box-pack: justify;
+    -webkit-lines: multiple; /* Only here for informative purpose, this line is what should have made it work, it has never been implemented */ /* Firefox 19- */
+    -moz-flex-flow: row wrap;
+    -moz-justify-content: space-between;
+    -moz-box-lines: multiple; /* Only here for informative purpose, this line is what should have made it work, it has never been implemented */ /* Chrome */
+    -webkit-flex-flow: row wrap;
+    -webkit-justify-content: space-between; /* IE10 */
+    -ms-flex-flow: row wrap;
+    -ms-justify-content: space-between; /* Opera 12.1, Firefox 20+ */
+    flex-flow: row wrap;
+    justify-content: space-between;
+}
+
+.sample-app
+{
+    display: block;
+    width: 330px;
+    height: 250px;
+    color: Black;
+    overflow: hidden;
+    display: inline-block;
+    border-right: 1px solid #d2d2d2;
+    margin-right: 10px;
+    margin-top: 10px;
+    padding: 10px;
+    background: #eee;
+    background: -moz-linear-gradient(top, #f8f8f8 0%, #dddddd 100%);
+    background: -webkit-gradient(linear, left top, left bottom, color-stop(0%,#f8f8f8), color-stop(100%,#dddddd));
+    background: -webkit-linear-gradient(top, #f8f8f8 0%,#dddddd 100%);
+    background: -o-linear-gradient(top, #f8f8f8 0%,#dddddd 100%);
+    background: -ms-linear-gradient(top, #f8f8f8 0%,#dddddd 100%);
+    background: linear-gradient(top, #f8f8f8 0%,#dddddd 100%);
+    border-radius: 5px;
+    border: 1px solid #d2d2d2;
+    box-shadow: inset #fff 0 1px 0, inset rgba(0,0,0,0.03) 0 -1px 0;
+    -webkit-box-flex: auto; /* iOS 6-, Safari 3.1-6 */
+    -moz-box-flex: 1.0; /* Firefox 19- */
+    -webkit-flex: auto; /* Chrome */
+    -ms-flex: auto; /* IE10 */
+    flex: auto; /* Opera 12.1, Firefox 20+ */
+}
+
+
+/* Workaround until Firefox implements flex-wrap properly: https://bugzilla.mozilla.org/show_bug.cgi?id=702508 */
+
+@supports not (flex-wrap: wrap)
+{
+    #samples section
+    {
+        display: inherit;
+        vertical-align: middle;
+        text-align: center;
+    }
+
+    .sample-app
+    {
+        flex: none;
+        display: inline-block;
+    }
+}
+
+.sample-app p
+{
+    font-size: 10pt;
+    line-height: 11pt;
+}
+
+.sample-app img
+{
+    display: block;
+    max-width: 90%;
+    max-height: 80%;
+}
+
+.sample-app iframe
+{
+    text-align: center;
+    display: block;
+    margin: 0 auto 20px auto;
+    width: 95%;
+}
+
+.sample-app h2
+{
+    margin-top: 2px;
+    font-size: 10pt;
+    margin-bottom: 18px;
+}
+
+.sample-links
+{
+    margin-bottom: 4px;
+}
+
+.sample-links ul
+{
+    list-style-type: none;
+    padding-left: 5px;
+}
+
+.sample-links li
+{
+    font-size: 12px;
+    line-height: 14px;
+}
+
+@media print, screen and (max-width: 960px)
+{
+    article
+    {
+        border: 1px solid #e5e5e5;
+        border-width: 1px 0;
+        padding: 20px 0;
+        margin: 0 0 20px;
+    }
+}
+
+@media print, screen and (max-width: 720px)
+{
+    body
+    {
+        word-wrap: break-word;
+    }
+
+    pre, code
+    {
+        word-wrap: normal;
+    }
+}
+
+@media print, screen and (max-width: 480px)
+{
+    body
+    {
+        padding: 15px;
+    }
+}
+
+@media print
+{
+    body
+    {
+        padding: 0.4in;
+        font-size: 12pt;
+        color: #444;
+    }
+}
+
+/* Sample gallery */
+
+.thumbnails
+{
+    text-align: left;
+    padding-left: 0;
+}
+
+.modal-body
+{
+    max-height: 80%;
+}
+
+.modal img
+{
+    max-width: 100%;
+    max-height: 300px;
+}
+
+.modal-dialog
+{
+    width: 800px;
+}
+
+@media (max-width: 768px)
+{
+    .modal
+    {
+        width: 90%;
+        margin-left: 2%;
+    }
+}
+
+.filter
+{
+}
+
+.lang-filter
+{
+}
