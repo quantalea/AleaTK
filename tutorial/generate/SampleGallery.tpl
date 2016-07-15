@@ -30,12 +30,14 @@
 
         <script type="text/javascript" src="scripts/tips.js"></script>
         <script type="text/javascript" src="scripts/scripts.js"></script>
+        <script type="text/javascript" src="scripts/version_list.js"></script>
 
         <link rel="stylesheet" type="text/css" href="content/src_highlight_tango.css">
         <link rel="stylesheet" type="text/css" href="content/gallery.css">
         <link rel="stylesheet" type="text/css" href="content/style.css">
 
         <script src="http://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+        
     </head>
 
     <body>
@@ -74,12 +76,13 @@
                         <li><a href="http://blog.quantalea.com">Blog</a></li>
                         <li><a href="http://www.aleagpu.com/release/">Alea GPU</a></li>
 
-                        <div class="dropdown">
+                        <div id="version_list">Loading versions ...</div>
+                        <!--<div class="dropdown">
                           <button class="dropbtn">Version</button>
                           <div class="dropdown-content">
                             <a href="http://www.aleatk.com/release/0_9_0/doc/">0.9.0</a>
                           </div>
-                        </div>                                             
+                        </div>-->
                     </ul>
                 </div>
 
@@ -177,7 +180,7 @@
                                         tprintfn """%s    $(content).removeClass('hidden');""" span
                                         tprintfn """%s    bootbox.dialog({ message: content, title: '%s', buttons: {""" span meta.Title
                                         tprintfn """%s            "Read more": { className: 'btn-primary', callback: function() { window.open('%s', '_blank'); }},""" span meta.ExtendedDocLink
-                                        tprintfn """%s            "Checkout the code": {className: 'btn-primary', callback: function() { window.open('%s', '_blank'); }},""" span meta.SourceCodeLink
+                                        tprintfn """%s            "Checkout the code": {className: 'btn-primary', callback: function() { window.open('%s', '_blank'); }},""" span meta.GitLink
                                         tprintfn """%s            "Download" : {className: 'btn-primary', callback: function() { window.open('%s', '_blank'); }}""" span meta.SourceCodeLink
                                         tprintfn """%s        }});""" span
                                         tprintfn """%s});""" span)

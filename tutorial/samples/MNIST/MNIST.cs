@@ -338,7 +338,7 @@ namespace Tutorial.Samples
             return new Model { Loss = new SoftmaxCrossEntropy<float>(y, labels), Images = images, Labels = labels };
         }
 
-        [Test, Ignore("Better explicitly run it.")]
+        [Test]
         public static void MultinomialRegression()
         {
             const double eta = 0.0005;
@@ -396,7 +396,7 @@ namespace Tutorial.Samples
             return new Model() { Loss = new SoftmaxCrossEntropy<float>(fc3.Output, labels), Images = images, Labels = labels };
         }
 
-        [Test, Ignore("Better explicitly run it.")]
+        [Test]
         public static void MultiLayerPerceptron()
         {
             const double eta = 0.005;
@@ -463,7 +463,7 @@ namespace Tutorial.Samples
             return new Model() { Loss = new SoftmaxCrossEntropy<float>(fc2.Output, labels), Images = images, Labels = labels };
         }
 
-        [Test, Ignore("Better explicitly run it.")]
+        [Test]
         public static void ConvolutionalNeuralNetwork()
         {
             const double eta = 0.001;
@@ -513,7 +513,7 @@ namespace Tutorial.Samples
             GC.WaitForPendingFinalizers();
         }
 
-        [Test, Ignore("Better explicitly run it.")]
+        [Test]
         public static void CompareMultinomialRegression()
         {
             var model = MultinomialRegressionModel();
@@ -559,7 +559,7 @@ namespace Tutorial.Samples
             GC.WaitForPendingFinalizers();
         }
 
-        [Test, Ignore("Better explicitly run it.")]
+        [Test]
         public static void CompareMultiLayerPerceptron()
         {
             var model = MultiLayerPerceptronModel();
@@ -608,7 +608,7 @@ namespace Tutorial.Samples
             GC.WaitForPendingFinalizers();
         }
 
-        [Test, Ignore("Better explicitly run it.")]
+        [Test]
         public static void CompareConvolutionalNeuralNetwork()
         {
             var model = ConvolutionalNeuralNetworkModel();

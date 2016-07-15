@@ -25,7 +25,7 @@ let tags =
         OptimizationTechniques,     "Optimization Techniques"
     ]
 
-let gitLinkRoot = "http://git.com/AleaTK/develop/tutorial/samples/"
+let gitLinkRoot = "http://github.com/quantalea/AleaTK/tree/master/tutorial/samples/"
 let sourceCodeLinkCsharp name = "../samples/" + name + ".zip"
 
 // Add all projects here so that html sample gallery builder can generate html code

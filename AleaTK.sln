@@ -33,11 +33,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "root", "root", "{1B0B8104-5
 		.gitignore = .gitignore
 		build.bat = build.bat
 		build.fsx = build.fsx
+		index.html = index.html
 		paket.dependencies = paket.dependencies
 		paket.lock = paket.lock
 		SolutionInfo.cs = SolutionInfo.cs
 		SolutionInfo.fs = SolutionInfo.fs
 		Version.fsx = Version.fsx
+		version_list.html = version_list.html
 	EndProjectSection
 EndProject
 Global

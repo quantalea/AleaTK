@@ -351,7 +351,7 @@ namespace Tutorial.Samples
             }
         }
 
-        [Test, Ignore("Too long to run, better run it explicitly.")]
+        [Test]
         public static void Run()
         {
             Run(false);

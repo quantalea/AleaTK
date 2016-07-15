@@ -28,6 +28,7 @@
 
         <script type="text/javascript" src="../scripts/tips.js"></script>
         <script type="text/javascript" src="../scripts/scripts.js"></script>
+        <script type="text/javascript" src="../scripts/version_list2.js"></script>
 
         <link rel="stylesheet" type="text/css" href="../content/style.css">
         <link rel="stylesheet" type="text/css" href="../content/src_highlight_tango.css">
@@ -70,12 +71,13 @@
                         <li><a href="http://blog.quantalea.com">Blog</a></li>
                         <li><a href="http://www.aleagpu.com/release/">Alea GPU</a></li>
 
-                        <div class="dropdown">
+                        <div id="version_list">Loading versions ...</div>
+                        <!--<div class="dropdown">
                           <button class="dropbtn">Version</button>
                           <div class="dropdown-content">
                             <a href="http://www.aleatk.com/release/0_9_0/doc/">0.9.0</a>
                           </div>
-                        </div>                                             
+                        </div>-->
                     </ul>
                 </div>
                 <div class="col-md-6" id="main" style="margin-top: 30px;">

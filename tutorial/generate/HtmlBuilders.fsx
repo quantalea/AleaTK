@@ -100,7 +100,7 @@ let buildSampleExtendedDocWithAbstract () =
             [
                 "$title$", meta.Title
                 "$sourceCodeLink$", ("../" + meta.SourceCodeLink)
-                "$gitLink$", ("../" + meta.SourceCodeLink)
+                "$gitLink$", ("../" + meta.GitLink)
                 "$imageLink$", ("../" + meta.ImageLink)
                 "$abstractHtml$", abstractHtml
                 "$extendedHtml$", extendedHtml

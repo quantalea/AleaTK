@@ -192,11 +192,16 @@ Target "Test" (fun _ ->
             !! "tutorial/samples/*/*.csproj"
             ++ "tutorial/samples/*/*.fsproj"
             |> Seq.map Path.GetFileNameWithoutExtension
+
+            // filter out these samples, because they need download dataset and that is too long
             |> Seq.choose (fun name ->
                 match name with
+                | "MNIST" -> ignoreTest "Sample" name
+                | "PTB" -> ignoreTest "Sample" name
                 | name when (File.Exists("release" @@ (sprintf "%s.exe" name))) -> sprintf "%s.exe" name |> Some
                 | name when (File.Exists("release" @@ (sprintf "%s.dll" name))) -> sprintf "%s.dll" name |> Some
                 | name -> ignoreTest "Sample" name )
+            
             |> Seq.toList
 
         let tests = tests :: samples :: [] |> List.concat
@@ -229,7 +234,8 @@ Target "Test" (fun _ ->
 Target "Package" (fun _ ->
     if ParamDoPackage then
         let tempDir = "temp"
-        let releaseOutputDir = ("output" @@ (sprintf "AleaTK.Release.%s" nugetVersion) @@ versionSubDir)
+        //let releaseOutputDir = ("output" @@ (sprintf "AleaTK.Release.%s" nugetVersion) @@ versionSubDir)
+        let releaseOutputDir = ("output" @@ "release" @@ versionSubDir)
         let equalVersion (version:string) = sprintf "[%s]" version
 
         let package_AleaTK() =
@@ -381,6 +387,10 @@ Target "Package" (fun _ ->
 
             CopyDir docOutputFolder "tutorial/output" (fun file -> true)
             DeleteFile (docOutputFolder @@ "run_server.bat")
+
+            "index.html" |> CopyFile ("output" @@ "release")
+            "version_list.html" |> CopyFile ("output" @@ "release")
+            ("tutorial" @@ "output" @@ "run_server.bat") |> CopyFile "output"
 
         package_AleaTK() 
         deploySamples()
