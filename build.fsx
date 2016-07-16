@@ -39,11 +39,13 @@ let mutable ParamDoPublish        = thisTarget = "Publish"
 let mutable ParamShowTest         = hasBuildParam "--show-test"
 let mutable ParamIgnoreTestFail   = hasBuildParam "--ignore-test-fail"
 let mutable ParamIncludePaket     = hasBuildParam "--include-paket"
+let mutable ParamAddLocalSource   = hasBuildParam "--add-local-source"
 
 // if publish, all tests must pass
 ParamDoTest <- if ParamDoPublish then true else ParamDoTest
 ParamIgnoreTestFail <- if ParamDoPublish then false else ParamIgnoreTestFail
 ParamIncludePaket <- if ParamDoPublish then false else ParamIncludePaket
+ParamAddLocalSource <- if ParamDoPublish then false else ParamAddLocalSource
 
 let product = "Alea TK"
 let company = "QuantAlea AG."
@@ -65,6 +67,7 @@ printfn "DoPublish              : %A" ParamDoPublish
 printfn "ShowTest               : %A" ParamShowTest
 printfn "IgnoreTestFail         : %A" ParamIgnoreTestFail
 printfn "IncludePaket           : %A" ParamIncludePaket
+printfn "ParamAddLocalSource    : %A" ParamAddLocalSource
 printfn "Version                : %s" version
 printfn "VersionType            : %s" (match versionType with Some t -> t | None -> "[stable]")
 printfn "NuGetVersion           : %s" nugetVersion
@@ -315,7 +318,7 @@ Target "Package" (fun _ ->
                 let sb = StringBuilder()
                 for line in lines do
                     let line = line.Trim()
-                    if (not ParamDoPublish) && (line = "source https://www.nuget.org/api/v2") then
+                    if (ParamAddLocalSource) && (line = "source https://www.nuget.org/api/v2") then
                         sb.AppendLine(sprintf "source %s" (Path.GetFullPath(".") @@ "output"))
                             .AppendLine(line)
                             |> ignore
