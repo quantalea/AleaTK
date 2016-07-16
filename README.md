@@ -1,11 +1,8 @@
 <a href="http://www.aleatk.com"><img border="0" alt="Alea TK" src="https://github.com/quantalea/AleaTK/blob/master/tutorial/design/images/Alea-TK-images.png" style="width:933px;">
 
-# Alea TK
 ***
 
-Alea TK is an **open source** library for general purpose **numerical computing** and **Machine Learning** based on tensors and tensor expressions. 
-
-<a href="http://www.aleatk.com">Alea TK</a>  is 
+<a href="http://www.aleatk.com">Alea TK</a> is an **open source** library for general purpose **numerical computing** and **Machine Learning** based on tensors and tensor expressions. 
 
 - GPU accelerated
 - Designed for rapid prototyping
