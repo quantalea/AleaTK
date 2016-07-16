@@ -42,6 +42,32 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "root", "root", "{1B0B8104-5
 		version_list.html = version_list.html
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "doc", "doc", "{3421C920-B42B-48F7-A5FF-06DF7B3998B9}"
+	ProjectSection(SolutionItems) = preProject
+		tutorial\doc\get_started.md = tutorial\doc\get_started.md
+		tutorial\doc\how_to.md = tutorial\doc\how_to.md
+		tutorial\doc\index.md = tutorial\doc\index.md
+		tutorial\doc\ml_tools.md = tutorial\doc\ml_tools.md
+		tutorial\doc\resources.md = tutorial\doc\resources.md
+		tutorial\doc\tutorials.md = tutorial\doc\tutorials.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "design", "design", "{FE83A1AB-B7B2-415D-A35E-4004B51F1B84}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "templates", "templates", "{AB884DFA-416F-43BE-869D-9418FF2A0143}"
+	ProjectSection(SolutionItems) = preProject
+		tutorial\design\templates\doc_page.html = tutorial\design\templates\doc_page.html
+		tutorial\design\templates\extended_sample_doc_page.html = tutorial\design\templates\extended_sample_doc_page.html
+		tutorial\design\templates\references.bib = tutorial\design\templates\references.bib
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "content", "content", "{1F815270-04BC-4140-81F6-A014560BA0EA}"
+	ProjectSection(SolutionItems) = preProject
+		tutorial\design\content\gallery.css = tutorial\design\content\gallery.css
+		tutorial\design\content\src_highlight_tango.css = tutorial\design\content\src_highlight_tango.css
+		tutorial\design\content\style.css = tutorial\design\content\style.css
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -85,5 +111,9 @@ Global
 		{87A9BBD7-C303-4A22-9175-74BCF148A81D} = {F08825D9-3ABF-45AE-A3FF-45701A9DE4FF}
 		{5F2ECB6E-7F39-4889-99C2-BBE6144CF7AC} = {F08825D9-3ABF-45AE-A3FF-45701A9DE4FF}
 		{EC890853-7BCF-4C35-A714-FFB81776E433} = {F08825D9-3ABF-45AE-A3FF-45701A9DE4FF}
+		{3421C920-B42B-48F7-A5FF-06DF7B3998B9} = {975ADAFF-65C8-4CB0-BA59-218433C3E89C}
+		{FE83A1AB-B7B2-415D-A35E-4004B51F1B84} = {975ADAFF-65C8-4CB0-BA59-218433C3E89C}
+		{AB884DFA-416F-43BE-869D-9418FF2A0143} = {FE83A1AB-B7B2-415D-A35E-4004B51F1B84}
+		{1F815270-04BC-4140-81F6-A014560BA0EA} = {FE83A1AB-B7B2-415D-A35E-4004B51F1B84}
 	EndGlobalSection
 EndGlobal
