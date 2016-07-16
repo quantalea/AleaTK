@@ -13,13 +13,12 @@ open Fake.AssemblyInfoFile
 Directory.SetCurrentDirectory __SOURCE_DIRECTORY__
 
 // Check versions before making release
+// e.x: Some "beta", None (for stable)
+let versionType = Some "beta"
 let majorVersion = 0
 let minorVersion = 9
 let patchVersion = 0
-// build version will be updated each time a sucessful publishing
-let buildVersion = Int32.Parse(File.ReadAllLines("Version.txt").[0])
-// e.x: Some "beta", None (for stable)
-let versionType = Some "beta"
+let buildVersion = 1
 // End of version section
 
 let version = sprintf "%d.%d.%d.%d" majorVersion minorVersion patchVersion buildVersion
@@ -413,9 +412,6 @@ Target "Publish" (fun _ ->
         else sprintf "Push %s to nuget.org failed." filename |> traceImportant
 
     pushNupkg "AleaTK"
-
-    if pushed > 0 then
-        File.WriteAllText("Version.txt", sprintf "%d" (buildVersion + 1))
 )
 
 Target "Help" (fun _ ->
