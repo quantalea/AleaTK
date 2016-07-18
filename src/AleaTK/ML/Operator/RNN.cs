@@ -264,6 +264,11 @@ namespace AleaTK.ML.Operator
 
             if (IsTraining)
             {
+                executor.AssignTensor(HX, hy);
+                executor.AssignTensor(CX, cy);
+
+                //executor.Context.Eval(cx.Reshape(-1)).Print();
+                
                 var reserveSpace = executor.GetTensor(ReserveSpace);
                 dnn.RNNForwardTraining(
                     rnnDesc, seqLength, xDesc, x.Buffer.Ptr, hxDesc, hx.Buffer.Ptr,
@@ -303,6 +308,9 @@ namespace AleaTK.ML.Operator
             {
                 throw new InvalidOperationException();
             }
+
+            //executor.AssignGradientDirectly(HY, executor.GetGradient(HX));
+            //executor.AssignGradientDirectly(CY, executor.GetGradient(CX));
 
             //executor.Context.Eval(executor.GetTensor(HY).Reshape(-1)).Print();
 
