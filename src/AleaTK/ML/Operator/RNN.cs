@@ -110,15 +110,7 @@ namespace AleaTK.ML.Operator
 
             for (var t = 0; t < n; ++t)
             {
-                if (t > 0)
-                {
-                    ctx.Assign(prevh, hout.Slice(Range.Create(t - 1), Range.All, Range.All));
-                }
-                else
-                {
-                    // TODO: h0
-                    ctx.Assign(prevh, 0.0.AsScalar<T>());
-                }
+                ctx.Assign(prevh, t > 0 ? hout.Slice(Range.Create(t - 1), Range.All, Range.All) : 0.0.AsScalar<T>());
 
                 ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(0)), Fill(Shape.Create(1, b, 1), ScalarOps.Conv<T>(1.0))); // bias
                 ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(1, InputSize + 1)),
@@ -137,15 +129,7 @@ namespace AleaTK.ML.Operator
                 ctx.Assign(ifogf.Slice(Range.Create(t), Range.All, Range.Create(3 * d, -1)),
                     Tanh(ifog.Slice(Range.Create(t), Range.All, Range.Create(3 * d, -1))));
 
-                if (t > 0)
-                {
-                    ctx.Assign(prevc, c.Slice(Range.Create(t - 1), Range.All, Range.All));
-                }
-                else
-                {
-                    // TODO: c0
-                    ctx.Assign(prevc, 0.0.AsScalar<T>());
-                }
+                ctx.Assign(prevc, t > 0 ? c.Slice(Range.Create(t - 1), Range.All, Range.All) : 0.0.AsScalar<T>());
 
                 ctx.Assign(c.Slice(Range.Create(t), Range.All, Range.All),
                     ifogf.Slice(Range.Create(t), Range.All, Range.Create(0, d)) *
