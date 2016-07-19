@@ -84,5 +84,44 @@ namespace AleaTKTest
             opt.Backward();
             ctx.ToGpuContext().Stream.Synchronize();
         }
+
+        private static void RandomMat(float[,,] mat, Random rng)
+        {
+            for (var i = 0; i < mat.GetLength(0); ++i)
+            {
+                for (var j = 0; j < mat.GetLength(1); ++j)
+                {
+                    for (var k = 0; k < mat.GetLength(2); ++k)
+                    {
+                        mat[i, j, k] = (float) rng.NextDouble();
+                    }
+                }
+            }
+        }
+
+        [Test]
+        public static void TestLSTM()
+        {
+            var rng = new Random(0);
+            var inputSize = 10;
+            var seqLength = 5;
+            var hiddenSize = 4;
+            var batchSize = 5;
+
+            var x = Variable<float>(PartialShape.Create(seqLength, batchSize, inputSize));
+            var lstm = new LSTM<float>(x, hiddenSize);
+
+            var ctx = Context.GpuContext(0);
+            var exe = new Executor(ctx, lstm.Y);
+
+            exe.Initalize();
+
+            var input = new float[seqLength, batchSize, inputSize];
+            RandomMat(input, rng);
+            exe.AssignTensor(x, input.AsTensor());
+            exe.Forward();
+
+            ctx.ToGpuContext().Stream.Synchronize();
+        }
     }
 }

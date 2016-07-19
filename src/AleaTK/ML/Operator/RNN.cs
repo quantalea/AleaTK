@@ -8,9 +8,9 @@ using static AleaTK.ML.Library;
 namespace AleaTK.ML.Operator
 {
 
-    public class RNN2<T> : Differentiable
+    public class LSTM<T> : Differentiable
     {
-        public RNN2(Variable<T> x, int hiddenSize)
+        public LSTM(Variable<T> x, int hiddenSize)
         {
             X = x;
             HiddenSize = hiddenSize;
@@ -24,7 +24,10 @@ namespace AleaTK.ML.Operator
             Y = Variable<T>(PartialShape.Create(SeqLength, -1, HiddenSize));
 
             // W (inputSize + hiddenSize + 1, 4 * hiddenSize)
-            W = Parameter(Fill(Shape.Create(InputSize + hiddenSize + 1, 4*hiddenSize), ScalarOps.Conv<T>(0.0)));
+            //W = Parameter(Fill(Shape.Create(InputSize + hiddenSize + 1, 4*hiddenSize), ScalarOps.Conv<T>(0.0)));
+            W =
+                Parameter(RandomUniform<T>(Shape.Create(InputSize + HiddenSize + 1, 4*HiddenSize))/
+                          (Math.Sqrt(InputSize + hiddenSize)).AsScalar<T>());
 
             Hin = AuxVariable<T>();
             Hout = AuxVariable<T>();
@@ -46,6 +49,15 @@ namespace AleaTK.ML.Operator
             AddAuxVar(PrevC);
             AddAuxVar(C);
             AddAuxVar(Ct);
+        }
+
+        public override void Initialize(Executor executor)
+        {
+            base.Initialize(executor);
+            // set bias to zero
+            var ctx = executor.Context;
+            var w = executor.GetTensor(W);
+            ctx.Assign(w.Slice(Range.Create(0), Range.All), 0.0.AsScalar<T>());
         }
 
         public int SeqLength { get; }
@@ -116,12 +128,12 @@ namespace AleaTK.ML.Operator
                 ctx.Assign(ifog.Slice(Range.Create(t), Range.All, Range.All),
                     Dot(hin.Slice(Range.Create(t), Range.All, Range.All), w));
 
-                ctx.Assign(ifogf.Slice(Range.Create(t), Range.All, Range.Create(0, 3*d)),
-                    1.0.AsScalar<T>()/
-                    (1.0.AsScalar<T>() + Exp(-ifog.Slice(Range.Create(t), Range.All, Range.Create(0, 3*d)))));
+                ctx.Assign(ifogf.Slice(Range.Create(t), Range.All, Range.Create(0, 3 * d)),
+                    1.0.AsScalar<T>() /
+                    (1.0.AsScalar<T>() + Exp(-ifog.Slice(Range.Create(t), Range.All, Range.Create(0, 3 * d)))));
 
-                ctx.Assign(ifogf.Slice(Range.Create(t), Range.All, Range.Create(3*d, -1)),
-                    Tanh(ifog.Slice(Range.Create(t), Range.All, Range.Create(3*d, -1))));
+                ctx.Assign(ifogf.Slice(Range.Create(t), Range.All, Range.Create(3 * d, -1)),
+                    Tanh(ifog.Slice(Range.Create(t), Range.All, Range.Create(3 * d, -1))));
 
                 if (t > 0)
                 {
@@ -134,15 +146,15 @@ namespace AleaTK.ML.Operator
                 }
 
                 ctx.Assign(c.Slice(Range.Create(t), Range.All, Range.All),
-                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(0, d))*
-                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(3*d, -1)) +
-                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(d, 2*d))*prevc);
+                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(0, d)) *
+                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(3 * d, -1)) +
+                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(d, 2 * d)) * prevc);
 
                 ctx.Assign(ct.Slice(Range.Create(t), Range.All, Range.All),
                     Tanh(c.Slice(Range.Create(t), Range.All, Range.All)));
 
                 ctx.Assign(hout.Slice(Range.Create(t), Range.All, Range.All),
-                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(2*d, 3*d))*
+                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(2 * d, 3 * d)) *
                     ct.Slice(Range.Create(t), Range.All, Range.All));
             }
 
