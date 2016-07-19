@@ -1125,5 +1125,131 @@ namespace AleaTKTest
 
             Assert.AreEqual(expected, _embedgrad.ToArray2D());
         }
+
+        [Test]
+        public static void Slice1DCpu()
+        {
+            var ctx = gpu;
+            var input = ctx.Allocate(new[] { 1.0, 2.0, 3.0, 4.0, 5.0 });
+            ctx.Assign(input.Slice(Range.All), input.Slice(Range.All) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 3.0, 4.0, 5.0, 6.0 }, input.ToArray());
+
+            ctx.Assign(input.Slice(Range.Create(1)), input.Slice(Range.Create(1)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 4.0, 4.0, 5.0, 6.0 }, input.ToArray());
+
+            ctx.Assign(input.Slice(Range.Create(1, 4)), input.Slice(Range.Create(1, 4)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 5.0, 5.0, 6.0, 6.0 }, input.ToArray());
+        }
+
+        [Test]
+        public static void Slice1DGpu()
+        {
+            var ctx = gpu;
+            var input = ctx.Allocate(new[] { 1.0, 2.0, 3.0, 4.0, 5.0 });
+            ctx.Assign(input.Slice(Range.All), input.Slice(Range.All) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 3.0, 4.0, 5.0, 6.0 }, input.ToArray());
+
+            ctx.Assign(input.Slice(Range.Create(1)), input.Slice(Range.Create(1)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 4.0, 4.0, 5.0, 6.0 }, input.ToArray());
+
+            ctx.Assign(input.Slice(Range.Create(1, 4)), input.Slice(Range.Create(1, 4)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 5.0, 5.0, 6.0, 6.0 }, input.ToArray());
+        }
+
+        [Test]
+        public static void Slice2DCpu()
+        {
+            var ctx = cpu;
+            var input = ctx.Allocate(new[,] { { 1.0, 2.0, 3.0 }, { 4.0, 5.0, 6.0 } });
+
+            ctx.Assign(input.Slice(Range.All, Range.All), input.Slice(Range.All, Range.All) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 2.0, 3.0, 4.0 }, { 5.0, 6.0, 7.0 } }, input.ToArray2D());
+
+            ctx.Assign(input.Slice(Range.All, Range.Create(0, 2)), input.Slice(Range.All, Range.Create(0, 2)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 3.0, 4.0, 4.0 }, { 6.0, 7.0, 7.0 } }, input.ToArray2D());
+
+            ctx.Assign(input.Slice(Range.Create(1), Range.Create(0, 2)), input.Slice(Range.Create(1), Range.Create(0, 2)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 3.0, 4.0, 4.0 }, { 7.0, 8.0, 7.0 } }, input.ToArray2D());
+        }
+
+        [Test]
+        public static void Slice2DGpu()
+        {
+            var ctx = gpu;
+            var input = ctx.Allocate(new[,] { { 1.0, 2.0, 3.0 }, { 4.0, 5.0, 6.0 } });
+
+            ctx.Assign(input.Slice(Range.All, Range.All), input.Slice(Range.All, Range.All) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 2.0, 3.0, 4.0 }, { 5.0, 6.0, 7.0 } }, input.ToArray2D());
+
+            ctx.Assign(input.Slice(Range.All, Range.Create(0, 2)), input.Slice(Range.All, Range.Create(0, 2)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 3.0, 4.0, 4.0 }, { 6.0, 7.0, 7.0 } }, input.ToArray2D());
+
+            ctx.Assign(input.Slice(Range.Create(1), Range.Create(0, 2)), input.Slice(Range.Create(1), Range.Create(0, 2)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 3.0, 4.0, 4.0 }, { 7.0, 8.0, 7.0 } }, input.ToArray2D());
+        }
+
+        [Test]
+        public static void Slice3DCpu()
+        {
+            var ctx = cpu;
+            var input = ctx.Allocate(new[, ,] { { { 1.0, 2.0, 3.0 }, { 4.0, 5.0, 6.0 } }, { { 1.5, 2.5, 3.5 }, { 4.5, 5.5, 6.5 } } });
+
+            ctx.Assign(input.Slice(Range.All, Range.All, Range.All), input.Slice(Range.All, Range.All, Range.All) + 1.0);
+            Assert.AreEqual(new[, ,] { { { 2.0, 3.0, 4.0 }, { 5.0, 6.0, 7.0 } }, { { 2.5, 3.5, 4.5 }, { 5.5, 6.5, 7.5 } } }, input.ToArray3D());
+
+            ctx.Assign(input.Slice(Range.All, Range.All, Range.Create(0, 2)), input.Slice(Range.All, Range.All, Range.Create(0, 2)) + 1.0);
+            Assert.AreEqual(new[, ,] { { { 3.0, 4.0, 4.0 }, { 6.0, 7.0, 7.0 } }, { { 3.5, 4.5, 4.5 }, { 6.5, 7.5, 7.5 } } }, input.ToArray3D());
+
+            ctx.Assign(input.Slice(Range.Create(1), Range.All, Range.Create(0, 2)), input.Slice(Range.Create(1), Range.All, Range.Create(0, 2)) + 1.0);
+            Assert.AreEqual(new[, ,]
+            {
+                {
+                    { 3.0, 4.0, 4.0 },
+                    { 6.0, 7.0, 7.0 }
+                },
+                {
+                    { 4.5, 5.5, 4.5 },
+                    { 7.5, 8.5, 7.5 }
+                }
+            }, input.ToArray3D());
+        }
+
+        [Test]
+        public static void Slice3DGpu()
+        {
+            var ctx = gpu;
+            var input = ctx.Allocate(new[, ,] { { { 1.0, 2.0, 3.0 }, { 4.0, 5.0, 6.0 } }, { { 1.5, 2.5, 3.5 }, { 4.5, 5.5, 6.5 } } });
+
+            ctx.Assign(input.Slice(Range.All, Range.All, Range.All), input.Slice(Range.All, Range.All, Range.All) + 1.0);
+            Assert.AreEqual(new[, ,] { { { 2.0, 3.0, 4.0 }, { 5.0, 6.0, 7.0 } }, { { 2.5, 3.5, 4.5 }, { 5.5, 6.5, 7.5 } } }, input.ToArray3D());
+
+            ctx.Assign(input.Slice(Range.All, Range.All, Range.Create(0, 2)), input.Slice(Range.All, Range.All, Range.Create(0, 2)) + 1.0);
+            Assert.AreEqual(new[, ,] { { { 3.0, 4.0, 4.0 }, { 6.0, 7.0, 7.0 } }, { { 3.5, 4.5, 4.5 }, { 6.5, 7.5, 7.5 } } }, input.ToArray3D());
+
+            ctx.Assign(input.Slice(Range.Create(1), Range.All, Range.Create(0, 2)), input.Slice(Range.Create(1), Range.All, Range.Create(0, 2)) + 1.0);
+            Assert.AreEqual(new[, ,]
+            {
+                {
+                    { 3.0, 4.0, 4.0 },
+                    { 6.0, 7.0, 7.0 }
+                },
+                {
+                    { 4.5, 5.5, 4.5 },
+                    { 7.5, 8.5, 7.5 }
+                }
+            }, input.ToArray3D());
+        }
     }
 }

@@ -88,6 +88,32 @@ namespace AleaTK
             return this;
         }
 
+        public Tensor<TValue> Slice(params Range[] ranges)
+        {
+            Util.EnsureTrue(Shape.Rank == ranges.Length);
+
+            var rank = Shape.Rank;
+            var newShape = new long[rank];
+            var newStrides = new long[rank];
+
+            var ptr = Buffer.Ptr;
+            for (var i = 0; i < rank; ++i)
+            {
+                var range = ranges[i];
+                var end = range.End >= 0 ? range.End : Shape[i];
+                newShape[i] = (end - range.Begin)/range.Step;
+                newStrides[i] = Layout.Strides[i]*range.Step;
+                ptr = ptr.LongPtr(Layout.Strides[i]*range.Begin);
+            }
+
+            var shape = new Shape(newShape);
+            var strides = new Strides(newStrides);
+            var layout = new Layout(shape, strides);
+            var memory = Buffer.Memory;
+            var buffer = new Buffer<TValue>(Device, memory, layout, ptr);
+            return new Tensor<TValue>(buffer);
+        }
+
         public Tensor<TValue> T
         {
             get

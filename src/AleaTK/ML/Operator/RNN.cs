@@ -2,9 +2,159 @@
 using System.Linq;
 using Alea;
 using Alea.cuDNN;
+using static AleaTK.Library;
+using static AleaTK.ML.Library;
 
 namespace AleaTK.ML.Operator
 {
+
+    public class RNN2<T> : Differentiable
+    {
+        public RNN2(Variable<T> x, int hiddenSize)
+        {
+            X = x;
+            HiddenSize = hiddenSize;
+
+            // X shape (seqLength, batch, inputSize)
+            Util.EnsureEqual(3, X.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
+            SeqLength = (int)X.Shape[0];
+            InputSize = (int)X.Shape[2];
+
+            // Y Shape (seqLength, batch, hiddenSize)
+            Y = Variable<T>(PartialShape.Create(SeqLength, -1, HiddenSize));
+
+            // W (inputSize + hiddenSize + 1, 4 * hiddenSize)
+            W = Parameter(Fill(Shape.Create(InputSize + hiddenSize + 1, 4*hiddenSize), ScalarOps.Conv<T>(0.0)));
+
+            Hin = AuxVariable<T>();
+            Hout = AuxVariable<T>();
+            IFOG = AuxVariable<T>();
+            IFOGf = AuxVariable<T>();
+            PrevH = AuxVariable<T>();
+            PrevC = AuxVariable<T>();
+            C = AuxVariable<T>();
+            Ct = AuxVariable<T>();
+
+            AddInput(X);
+            AddOutput(Y);
+            AddInput(W);
+            AddAuxVar(Hin);
+            AddAuxVar(Hout);
+            AddAuxVar(IFOG);
+            AddAuxVar(IFOGf);
+            AddAuxVar(PrevH);
+            AddAuxVar(PrevC);
+            AddAuxVar(C);
+            AddAuxVar(Ct);
+        }
+
+        public int SeqLength { get; }
+
+        public int InputSize { get; }
+
+        public int HiddenSize { get; }
+
+        public Variable<T> X { get; }
+
+        public Variable<T> Y { get; }
+
+        public Variable<T> W { get; }
+
+        public Variable<T> Hin { get; }
+
+        public Variable<T> Hout { get; }
+
+        public Variable<T> IFOG { get; }
+
+        public Variable<T> IFOGf { get; }
+
+        public Variable<T> PrevH { get; }
+
+        public Variable<T> PrevC { get; }
+
+        public Variable<T> C { get; }
+
+        public Variable<T> Ct { get; }
+
+        public override void Forward(Executor executor)
+        {
+            var w = executor.GetTensor(W);
+            var xphpb = w.Shape[0];
+            var x = executor.GetTensor(X);
+            var b = x.Shape[0];
+            var n = x.Shape[1];
+            var d = HiddenSize;
+
+            var hin = executor.GetTensor(Hin, Shape.Create(n, b, xphpb));
+            var hout = executor.GetTensor(Hout, Shape.Create(n, b, d));
+            var prevh = executor.GetTensor(PrevH, Shape.Create(1, b, d));
+            var ifog = executor.GetTensor(IFOG, Shape.Create(n, b, d*4));
+            var ifogf = executor.GetTensor(IFOGf, Shape.Create(n, b, d*4));
+            var c = executor.GetTensor(C, Shape.Create(n, b, d));
+            var ct = executor.GetTensor(Ct, Shape.Create(n, b, d));
+            var prevc = executor.GetTensor(PrevC, Shape.Create(1, b, d));
+
+            var ctx = executor.Context;
+
+            for (var t = 0; t < n; ++t)
+            {
+                if (t > 0)
+                {
+                    ctx.Assign(prevh, hout.Slice(Range.Create(t - 1), Range.All, Range.All));
+                }
+                else
+                {
+                    // TODO: h0
+                    ctx.Assign(prevh, 0.0.AsScalar<T>());
+                }
+
+                ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(0)), 1.0.AsScalar<T>()); // bias
+                ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(1, InputSize + 1)),
+                    x.Slice(Range.Create(t), Range.All, Range.All));
+                ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(InputSize + 1, -1)), prevh);
+
+                ctx.Assign(ifog.Slice(Range.Create(t), Range.All, Range.All),
+                    Dot(hin.Slice(Range.Create(t), Range.All, Range.All), w));
+
+                ctx.Assign(ifogf.Slice(Range.Create(t), Range.All, Range.Create(0, 3*d)),
+                    1.0.AsScalar<T>()/
+                    (1.0.AsScalar<T>() + Exp(-ifog.Slice(Range.Create(t), Range.All, Range.Create(0, 3*d)))));
+
+                ctx.Assign(ifogf.Slice(Range.Create(t), Range.All, Range.Create(3*d, -1)),
+                    Tanh(ifog.Slice(Range.Create(t), Range.All, Range.Create(3*d, -1))));
+
+                if (t > 0)
+                {
+                    ctx.Assign(prevc, c.Slice(Range.Create(t - 1), Range.All, Range.All));
+                }
+                else
+                {
+                    // TODO: c0
+                    ctx.Assign(prevc, 0.0.AsScalar<T>());
+                }
+
+                ctx.Assign(c.Slice(Range.Create(t), Range.All, Range.All),
+                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(0, d))*
+                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(3*d, -1)) +
+                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(d, 2*d))*prevc);
+
+                ctx.Assign(ct.Slice(Range.Create(t), Range.All, Range.All),
+                    Tanh(c.Slice(Range.Create(t), Range.All, Range.All)));
+
+                ctx.Assign(hout.Slice(Range.Create(t), Range.All, Range.All),
+                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(2*d, 3*d))*
+                    ct.Slice(Range.Create(t), Range.All, Range.All));
+            }
+
+            executor.AssignTensor(Y, hout);
+        }
+
+        public override void Backward(Executor executor)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     public class RNN<T> : Differentiable
     {
         public RNN(Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, double bias = 0.0, ulong dropoutSeed = 1337UL)

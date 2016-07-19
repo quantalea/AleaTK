@@ -187,7 +187,8 @@ namespace AleaTK
                 var needAssign =
                     execution.RequireOutputLValue ||
                     rValue.Layout == null ||
-                    (execution.RequireLayoutInnerChangeMost && !rValue.Layout.IsInnerChangeMost);
+                    (execution.RequireLayoutInnerChangeMost && !rValue.Layout.IsInnerChangeMost) ||
+                    (execution.RequireLayoutFullyUnitStride && !rValue.Layout.IsFullyUnitStride);
 
                 if (needAssign)
                 {
@@ -203,7 +204,8 @@ namespace AleaTK
             else
             {
                 var needAllocate =
-                    (execution.RequireLayoutInnerChangeMost && !execution.SpecifiedOutput.Layout.IsInnerChangeMost);
+                    (execution.RequireLayoutInnerChangeMost && !execution.SpecifiedOutput.Layout.IsInnerChangeMost) ||
+                    (execution.RequireLayoutFullyUnitStride && !execution.SpecifiedOutput.Layout.IsFullyUnitStride);
 
                 if (needAllocate)
                 {
@@ -294,6 +296,8 @@ namespace AleaTK
             public bool RequireOutputLValue { get; set; } = false;
 
             public bool RequireLayoutInnerChangeMost { get; set; } = false;
+
+            public bool RequireLayoutFullyUnitStride { get; set; } = false;
 
             // specified output? usually for leaf expr, they set this as input
             // and for the output of this assignment.
@@ -387,6 +391,12 @@ namespace AleaTK
         {
             Util.EnsureEqual(Status.Preparing, _status);
             _executions[expr].RequireLayoutInnerChangeMost = true;
+        }
+
+        public void RequireLayoutFullyUnitStride(Expr expr)
+        {
+            Util.EnsureEqual(Status.Preparing, _status);
+            _executions[expr].RequireLayoutFullyUnitStride = true;
         }
 
         private void Prepare(Expr expr, Expr reference, int referenceOperandId)
@@ -538,12 +548,52 @@ namespace AleaTK
             return false;
         }
 
+        public bool AssignByRank3<T>(ILValue<T> lValue, IRValue<T> rValue)
+        {
+            var l0 = lValue.Layout.Shape[0];
+            var l1 = lValue.Layout.Shape[1];
+            var l2 = lValue.Layout.Shape[2];
+            var read = rValue.BufferReader.GetReader3(lValue.Layout.Shape);
+            var write = lValue.Buffer.Writer3;
+
+            if (Context.Type == ContextType.Gpu)
+            {
+                var stream = Context.ToGpuContext().Stream;
+                stream.For(0L, l0*l1*l2, i =>
+                {
+                    var i0 = i/(l1*l2);
+                    var i1 = (i%(l1*l2))/l2;
+                    var i2 = (i%(l1*l2))%l2;
+                    write(i0, i1, i2, read(i0, i1, i2));
+                });
+                return true;
+            }
+
+            if (Context.Type == ContextType.Cpu)
+            {
+                for (var i = 0L; i < l0; ++i)
+                {
+                    for (var j = 0L; j < l1; ++j)
+                    {
+                        for (var k = 0L; k < l2; ++k)
+                        {
+                            write(i, j, k, read(i, j, k));
+                        }
+                    }
+                }
+                return true;
+            }
+
+            return false;
+        }
+
         public void Assign<T>(ILValue<T> lValue, IRValue<T> rValue)
         {
             if (lValue == rValue) return;
             Util.EnsureTrue(Shape.Broadcast(rValue.Layout.Shape, lValue.Layout.Shape).SequenceEqual(lValue.Layout.Shape));
             if (Layout.CanFullyUnitStrideMapping(rValue.Layout, lValue.Layout) && AssignByFlat1(lValue, rValue)) return;
             if (rValue.Layout.Rank == 2 && lValue.Layout.Rank == 2 && AssignByRank2(lValue, rValue)) return;
+            if (rValue.Layout.Rank == 3 && lValue.Layout.Rank == 3 && AssignByRank3(lValue, rValue)) return;
             throw new NotImplementedException();
         }
     }

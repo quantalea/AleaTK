@@ -379,6 +379,31 @@ namespace AleaTK
             return Context.CpuContext.ToArray(tensor);
         }
 
+        public static T[,,] ToArray3D<T>(this Context context, Tensor<T> tensor)
+        {
+            Util.EnsureTrue(tensor.Layout.Rank >= 3);
+
+            if (!tensor.Layout.IsInnerChangeMostFullyPacked)
+            {
+                var tempTensor = context.Device.Allocate<T>(tensor.Layout, tensor.Buffer.Memory.Length);
+                context.Copy(tempTensor, tensor).Wait();
+                tensor = tempTensor;
+            }
+
+            var l0 = tensor.Layout.Shape[0];
+            var l1 = tensor.Layout.Shape[1];
+            var l2 = tensor.Layout.Shape.Skip(2).Aggregate(ScalarOps.Mul);
+            var array = new T[l0, l1, l2];
+            var cpuTensor = array.AsTensor();
+            context.Copy(cpuTensor, tensor).Wait();
+            return array;
+        }
+
+        public static T[,,] ToArray3D<T>(this Tensor<T> tensor)
+        {
+            return Context.CpuContext.ToArray3D(tensor);
+        }
+
         public static T[,] ToArray2D<T>(this Context context, Tensor<T> tensor)
         {
             Util.EnsureTrue(tensor.Layout.Rank >= 2);

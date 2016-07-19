@@ -56,6 +56,8 @@ namespace AleaTK.ExprImpl
         {
             assignment.RequireLayoutInnerChangeMost(Input1);
             assignment.RequireLayoutInnerChangeMost(Input2);
+            assignment.RequireLayoutFullyUnitStride(Input1);
+            assignment.RequireLayoutFullyUnitStride(Input2);
         }
 
         protected override IRValue<TResult> GenerateRValue(Assignment assignment)
@@ -75,7 +77,7 @@ namespace AleaTK.ExprImpl
                 return new TensorReader<TResult>(device, layout, rawReader);
             }
 
-            return null;
+            throw new NotImplementedException();
         }
     }
 }
