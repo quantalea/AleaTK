@@ -105,6 +105,7 @@ namespace AleaTKTest
             var rng = new Random(0);
             var inputSize = 10;
             var seqLength = 5;
+            //var seqLength = 1;
             var hiddenSize = 4;
             var batchSize = 5;
 
@@ -120,6 +121,8 @@ namespace AleaTKTest
             RandomMat(input, rng);
             exe.AssignTensor(x, input.AsTensor());
             exe.Forward();
+
+            ctx.Eval(exe.GetTensor(lstm.Y).Reshape(seqLength*batchSize, -1)).Print();
 
             ctx.ToGpuContext().Stream.Synchronize();
         }

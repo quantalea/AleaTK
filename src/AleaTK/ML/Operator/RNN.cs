@@ -93,8 +93,8 @@ namespace AleaTK.ML.Operator
             var w = executor.GetTensor(W);
             var xphpb = w.Shape[0];
             var x = executor.GetTensor(X);
-            var b = x.Shape[0];
-            var n = x.Shape[1];
+            var b = x.Shape[1];
+            var n = x.Shape[0];
             var d = HiddenSize;
 
             var hin = executor.GetTensor(Hin, Shape.Create(n, b, xphpb));
@@ -120,13 +120,15 @@ namespace AleaTK.ML.Operator
                     ctx.Assign(prevh, 0.0.AsScalar<T>());
                 }
 
-                ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(0)), 1.0.AsScalar<T>()); // bias
+                ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(0)), Fill(Shape.Create(1, b, 1), ScalarOps.Conv<T>(1.0))); // bias
                 ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(1, InputSize + 1)),
                     x.Slice(Range.Create(t), Range.All, Range.All));
                 ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(InputSize + 1, -1)), prevh);
 
+                //Console.WriteLine(hin.Shape);
+                //Console.WriteLine(w.Shape);
                 ctx.Assign(ifog.Slice(Range.Create(t), Range.All, Range.All),
-                    Dot(hin.Slice(Range.Create(t), Range.All, Range.All), w));
+                    Dot(hin.Slice(Range.Create(t), Range.All, Range.All).Reshape(b, xphpb), w));
 
                 ctx.Assign(ifogf.Slice(Range.Create(t), Range.All, Range.Create(0, 3 * d)),
                     1.0.AsScalar<T>() /
