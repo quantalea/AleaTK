@@ -1,14 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Runtime.Remoting.Messaging;
-using System.Text;
-using System.Threading.Tasks;
 using AleaTK;
 using AleaTK.ML;
 using AleaTK.ML.Operator;
+using csmatio.io;
+using csmatio.types;
 using NUnit.Framework;
 using static AleaTK.Library;
 using static AleaTK.ML.Library;
@@ -102,7 +98,15 @@ namespace AleaTKTest
         [Test]
         public static void TestLSTM()
         {
+
             var rng = new Random(0);
+
+            var mfr = new MatFileReader("../tests/AleaTKTest/data/lstm_small.mat");
+
+            var inputSize = ((MLInt32)mfr.GetMLArray("InputSize")).Get(0);
+            var seqLength = ((MLInt32)mfr.GetMLArray("SeqLength")).Get(0);
+            var hiddenSize = ((MLInt32)mfr.GetMLArray("HiddenSize")).Get(0);
+            var batchSize = ((MLInt32)mfr.GetMLArray("BatchSize")).Get(0);
 
             //var inputSize = 10;
             //var seqLength = 5;
@@ -110,10 +114,10 @@ namespace AleaTKTest
             //var hiddenSize = 4;
             //var batchSize = 5;
 
-            var inputSize = 5;
-            var seqLength = 3;
-            var hiddenSize = 4;
-            var batchSize = 2;
+            //var inputSize = 5;
+            //var seqLength = 3;
+            //var hiddenSize = 4;
+            //var batchSize = 2;
 
             var x = Variable<float>(PartialShape.Create(seqLength, batchSize, inputSize));
             var lstm = new LSTM<float>(x, hiddenSize);
