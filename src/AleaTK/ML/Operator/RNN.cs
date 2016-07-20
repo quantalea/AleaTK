@@ -126,40 +126,6 @@ namespace AleaTK.ML.Operator
 
             for (var t = 0; t < n; ++t)
             {
-<<<<<<< 48ffa75a6d00ddbc17f3e7bf64bfec7edd6ceff2
-                ctx.Assign(prevh, t > 0 ? hout.Slice(Range.Create(t - 1), Range.All, Range.All) : 0.0.AsScalar<T>());
-
-                ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(0)), Fill(Shape.Create(1, b, 1), ScalarOps.Conv<T>(1.0))); // bias
-                ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(1, InputSize + 1)),
-                    x.Slice(Range.Create(t), Range.All, Range.All));
-                ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(InputSize + 1, -1)), prevh);
-
-                //Console.WriteLine(hin.Shape);
-                //Console.WriteLine(w.Shape);
-                ctx.Assign(ifog.Slice(Range.Create(t), Range.All, Range.All),
-                    Dot(hin.Slice(Range.Create(t), Range.All, Range.All).Reshape(b, xphpb), w));
-
-                ctx.Assign(ifogf.Slice(Range.Create(t), Range.All, Range.Create(0, 3 * d)),
-                    1.0.AsScalar<T>() /
-                    (1.0.AsScalar<T>() + Exp(-ifog.Slice(Range.Create(t), Range.All, Range.Create(0, 3 * d)))));
-
-                ctx.Assign(ifogf.Slice(Range.Create(t), Range.All, Range.Create(3 * d, -1)),
-                    Tanh(ifog.Slice(Range.Create(t), Range.All, Range.Create(3 * d, -1))));
-
-                ctx.Assign(prevc, t > 0 ? c.Slice(Range.Create(t - 1), Range.All, Range.All) : 0.0.AsScalar<T>());
-
-                ctx.Assign(c.Slice(Range.Create(t), Range.All, Range.All),
-                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(0, d)) *
-                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(3 * d, -1)) +
-                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(d, 2 * d)) * prevc);
-
-                ctx.Assign(ct.Slice(Range.Create(t), Range.All, Range.All),
-                    Tanh(c.Slice(Range.Create(t), Range.All, Range.All)));
-
-                ctx.Assign(hout.Slice(Range.Create(t), Range.All, Range.All),
-                    ifogf.Slice(Range.Create(t), Range.All, Range.Create(2 * d, 3 * d)) *
-                    ct.Slice(Range.Create(t), Range.All, Range.All));
-=======
                 // stack input
                 var prevh = executor.GetTensor(Temp1, Shape.Create(1, b, d));
                 ctx.Assign(prevh, t > 0 ? hout.Slice(t - 1) : h0);
@@ -217,6 +183,7 @@ namespace AleaTK.ML.Operator
             var n = hout.Shape[0];
             var b = hout.Shape[1];
             var d = (int)hout.Shape[2];
+            var xphpb = w.Shape[0];
 
             var c0 = executor.GetTensor(CX);
             var h0 = executor.GetTensor(HX);
@@ -243,39 +210,41 @@ namespace AleaTK.ML.Operator
                 var tanhCt = ct.Slice(t);
 
                 // do_t = dh_t * tanh(c_t)
-                ctx.Assign(dIFOGf.Slice(t, -1, Range(2*d, 3*d)), tanhCt*dhout.Slice(t));
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(2 * d, 3 * d)), tanhCt * dhout.Slice(t));
 
                 // dc_t += dh_t * o_t * (1 - tanh**2(c_t))
                 ctx.Assign(dc.Slice(t),
                     dc.Slice(t) +
-                    (1.0.AsScalar<T>() - tanhCt*tanhCt)*(ifogf.Slice(t, -1, Range(2*d, 3*d))*dhout.Slice(t)));
+                    (1.0.AsScalar<T>() - tanhCt * tanhCt) * (ifogf.Slice(t, -1, Range(2 * d, 3 * d)) * dhout.Slice(t)));
 
                 // df_t = dc_t * c_t-1
                 if (t > 0)
                 {
-                    ctx.Assign(dIFOGf.Slice(t, -1, Range(d, 2*d)), c.Slice(t - 1)*dc.Slice(t));
-                    ctx.Assign(dc.Slice(t - 1), dc.Slice(t - 1) + ifogf.Slice(t, -1, Range(d, 2*d))*dc.Slice(t));
+                    ctx.Assign(dIFOGf.Slice(t, -1, Range(d, 2 * d)), c.Slice(t - 1) * dc.Slice(t));
+                    ctx.Assign(dc.Slice(t - 1), dc.Slice(t - 1) + ifogf.Slice(t, -1, Range(d, 2 * d)) * dc.Slice(t));
                 }
                 else
                 {
-                    ctx.Assign(dIFOGf.Slice(t, -1, Range(d, 2*d)), c0*dc.Slice(t));
-                    ctx.Assign(dc0, (ifogf.Slice(t, -1, Range(d, 2*d))*dc.Slice(t)).Reshape(b, d));
+                    ctx.Assign(dIFOGf.Slice(t, -1, Range(d, 2 * d)), c0 * dc.Slice(t));
+                    ctx.Assign(dc0, (ifogf.Slice(t, -1, Range(d, 2 * d)) * dc.Slice(t)).Reshape(b, d));
                 }
                 // di_t = dc_t * a_t
-                ctx.Assign(dIFOGf.Slice(t, -1, Range(0, d)), ifogf.Slice(t, -1, Range(3*d, -1))*dc.Slice(t));
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(0, d)), ifogf.Slice(t, -1, Range(3 * d, -1)) * dc.Slice(t));
                 // da_t = dc_t * i_t
-                ctx.Assign(dIFOGf.Slice(t, -1, Range(3*d, -1)), ifogf.Slice(t, -1, Range(0, d))*dc.Slice(t));
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(3 * d, -1)), ifogf.Slice(t, -1, Range(0, d)) * dc.Slice(t));
 
                 // backprop activation functions
-                var tmp1 = ifogf.Slice(t, -1, Range(3*d, -1));
-                ctx.Assign(dIFOG.Slice(t, -1, Range(3*d, -1)), (1.0.AsScalar<T>() - tmp1 * tmp1)*dIFOGf.Slice(t, -1, Range(3*d, -1)));
-                var tmp2 = ifogf.Slice(t, -1, Range(0, 3*d));
-                ctx.Assign(dIFOG.Slice(t, -1, Range(0, 3*d)),
-                    (tmp2*(1.0.AsScalar<T>() - tmp2))*dIFOGf.Slice(t, -1, Range(0, 3*d)));
+                var tmp1 = ifogf.Slice(t, -1, Range(3 * d, -1));
+                ctx.Assign(dIFOG.Slice(t, -1, Range(3 * d, -1)), (1.0.AsScalar<T>() - tmp1 * tmp1) * dIFOGf.Slice(t, -1, Range(3 * d, -1)));
+                var tmp2 = ifogf.Slice(t, -1, Range(0, 3 * d));
+                ctx.Assign(dIFOG.Slice(t, -1, Range(0, 3 * d)),
+                    (tmp2 * (1.0.AsScalar<T>() - tmp2)) * dIFOGf.Slice(t, -1, Range(0, 3 * d)));
 
                 // backprop matrix multiply
-                ctx.Assign(dw, dw + Dot(hin.Slice(t).T, dIFOG.Slice(t)));
-                ctx.Assign(dhin.Slice(t), Dot(dIFOG.Slice(t), w.T));
+                var tmp3 = executor.GetTensor(Temp1, Shape.Create(b, xphpb));
+                ctx.Assign(tmp3, hin.Slice(t).Reshape(b, xphpb));
+                ctx.Assign(dw, dw + Dot(tmp3.T, dIFOG.Slice(t).Reshape(b, 4*d)));
+                ctx.Assign(dhin.Slice(t), Dot(dIFOG.Slice(t).Reshape(b, 4*d), w.T));
 
                 // backprop the identity transforms into hin
                 ctx.Assign(dx.Slice(t), dhin.Slice(t, -1, Range(1, InputSize + 1)));
@@ -285,9 +254,8 @@ namespace AleaTK.ML.Operator
                 }
                 else
                 {
-                    ctx.Assign(dh0, dh0 + dhin.Slice(t, -1, Range(InputSize + 1, -1)));
+                    ctx.Assign(dh0, (dh0.Reshape(1, b, d) + dhin.Slice(t, -1, Range(InputSize + 1, -1))).Reshape(b, d));
                 }
->>>>>>> 89707ada1ea7cf18d1d9ec732073f0aec84dd67d
             }
         }
     }

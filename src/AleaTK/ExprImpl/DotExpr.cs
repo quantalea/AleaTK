@@ -25,7 +25,7 @@ namespace AleaTK.ExprImpl
             }
             else
             {
-                throw new InvalidOperationException("Dot shape is wrong.");
+                throw new InvalidOperationException($"Dot shape is wrong: {A.Shape} dot {B.Shape}");
             }
         }
 

@@ -98,10 +98,7 @@ namespace AleaTKTest
         [Test]
         public static void TestLSTM()
         {
-
-            var rng = new Random(0);
-
-            var mfr = new MatFileReader("../tests/AleaTKTest/data/lstm_small.mat");
+            var mfr = new MatFileReader(@"../tests/AleaTKTest/data/lstm_small.mat");
 
             var inputSize = mfr.GetInt("InputSize");
             var seqLength = mfr.GetInt("SeqLength");
@@ -116,33 +113,61 @@ namespace AleaTKTest
 
             exe.Initalize();
 
-<<<<<<< 48ffa75a6d00ddbc17f3e7bf64bfec7edd6ceff2
+            var h0 = mfr.GetDoubleArray("h0").Select(n => (float)n).ToArray();
+            var c0 = mfr.GetDoubleArray("c0").Select(n => (float)n).ToArray();
+            exe.AssignTensor(lstm.CX, c0.AsTensor(Shape.Create(batchSize, hiddenSize)));
+            exe.AssignTensor(lstm.HX, h0.AsTensor(Shape.Create(batchSize, hiddenSize)));
+
             var input = mfr.GetDoubleArray("X").Select(n => (float) n).ToArray();
-=======
-            exe.AssignTensor(lstm.CX, Fill(Shape.Create(batchSize, hiddenSize), 0.0f));
-            exe.AssignTensor(lstm.HX, Fill(Shape.Create(batchSize, hiddenSize), 0.0f));
-
-            //var input = new float[seqLength, batchSize, inputSize];
-            //RandomMat(input, rng);
-
-            var input_ = /*[shape  (3, 2, 5) ]*/ new []{ -0.49803245069230, 1.92953205381699, 0.94942080692576, 0.08755124138519, -1.22543551883017, 0.84436297640155, -1.00021534738956, -1.54477109677761, 1.18802979235230, 0.31694261192485, 0.92085882378082, 0.31872765294302, 0.85683061190269, -0.65102559330015, -1.03424284178446, 0.68159451828163, -0.80340966417384, -0.68954977775020, -0.45553250351734, 0.01747915902506, -0.35399391125348, -1.37495129341802, -0.64361840283289, -2.22340315222443, 0.62523145102719, -1.60205765560675, -1.10438333942845, 0.05216507926097, -0.73956299639131, 1.54301459540674};
-            var input = input_.Select(n => (float) n).ToArray();
-
-
->>>>>>> 89707ada1ea7cf18d1d9ec732073f0aec84dd67d
-            Context.CpuContext.Eval(input.AsTensor().Reshape(seqLength*batchSize, inputSize)).Print();
-
+            //input.AsTensor(Shape.Create(seqLength*batchSize, inputSize)).Print();
             exe.AssignTensor(x, input.AsTensor(Shape.Create(seqLength, batchSize, inputSize)));
 
-            var w = mfr.GetDoubleArray("WLSTM").Select(n => (float) n).ToArray();
-            exe.AssignTensor(lstm.W, w.AsTensor(Shape.Create(inputSize + hiddenSize + 1, 4*hiddenSize)));
+            var w = mfr.GetDoubleArray("W").Select(n => (float)n).ToArray();
+            w.AsTensor(Shape.Create(inputSize + hiddenSize + 1, 4 * hiddenSize)).Print();
+            exe.AssignTensor(lstm.W, w.AsTensor(Shape.Create(inputSize + hiddenSize + 1, 4 * hiddenSize)));
 
             exe.Forward();
 
-            var H = mfr.GetDoubleArray("H");
+            var H = mfr.GetDoubleArray("H").Select(n => (float)n).ToArray();
             H.AsTensor(Shape.Create(seqLength*batchSize, hiddenSize)).Print();
 
-            ctx.Eval(exe.GetTensor(lstm.Y).Reshape(seqLength * batchSize, -1)).Print();
+            var myH = exe.GetTensor(lstm.Y).ToArray();
+            myH.AsTensor(Shape.Create(seqLength*batchSize, hiddenSize)).Print();
+
+            AreClose(H, myH, 1e-6);
+
+            var dH = mfr.GetDoubleArray("dH").Select(n => (float) n).ToArray();
+            exe.AssignGradientDirectly(lstm.Y, dH.AsTensor(Shape.Create(seqLength, batchSize, hiddenSize)));
+
+            exe.Backward();
+
+            var dX = mfr.GetDoubleArray("dX").Select(n => (float) n).ToArray();
+            dX.AsTensor(Shape.Create(seqLength*batchSize, inputSize)).Print();
+
+            var dXmy = exe.GetGradient(lstm.X).ToArray();
+            dXmy.AsTensor(Shape.Create(seqLength * batchSize, inputSize)).Print();
+            AreClose(dX, dXmy, 1e-6);
+
+            var dW = mfr.GetDoubleArray("dW").Select(n => (float)n).ToArray();
+            dW.AsTensor(Shape.Create(inputSize + hiddenSize + 1, 4*hiddenSize)).Print();
+
+            var dWmy = exe.GetGradient(lstm.W).ToArray();
+            dWmy.AsTensor(Shape.Create(lstm.W.Shape.AsArray)).Print();
+            AreClose(dW, dWmy, 1e-6);
+
+            var dc0 = mfr.GetDoubleArray("dc0").Select(n => (float)n).ToArray();
+            dc0.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
+
+            var dc0my = exe.GetGradient(lstm.CX).ToArray();
+            dc0my.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
+            AreClose(dc0, dc0my, 1e-6);
+
+            var dh0 = mfr.GetDoubleArray("dh0").Select(n => (float)n).ToArray();
+            dh0.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
+
+            var dh0my = exe.GetGradient(lstm.HX).ToArray();
+            dh0my.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
+            AreClose(dh0, dh0my, 1e-6);
 
             ctx.ToGpuContext().Stream.Synchronize();
         }

@@ -293,9 +293,19 @@ namespace AleaTK.ML
             }
         }
 
+        public Task AssignGradientDirectly<T>(Variable<T> variable, Tensor<T> srcTensor)
+        {
+            //if (!variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
+
+            var data = _data[variable];
+            var blob = data.GetOrAllocateGradient(srcTensor.Layout, srcTensor.Memory.Length);
+            var dstTensor = blob.Cast<T>();
+            return Context.Copy(dstTensor, srcTensor);
+        }
+
         public Task AssignGradientDirectly<T>(Variable<T> variable, Expr<T> expr)
         {
-            if (!variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
+            //if (!variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
 
             var data = _data[variable];
             var shape = data.Tensor.Layout.Shape;

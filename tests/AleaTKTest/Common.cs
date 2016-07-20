@@ -197,6 +197,19 @@ namespace AleaTKTest
             }
         }
 
+        public static void AreClose(float[] expected, float[] actual, double error)
+        {
+            if (expected.Length != actual.Length)
+            {
+                Assert.Fail($"Length doesn't match: {expected.Length} vs {actual.Length}");
+            }
+
+            for (var i = 0; i < expected.Length; ++i)
+            {
+                Assert.That(actual[i], Is.EqualTo(expected[i]).Within(error));
+            }
+        }
+
         public static void AreEqual<T>(T[,] expected, T[,] actual)
         {
             Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
@@ -211,6 +224,19 @@ namespace AleaTKTest
         }
 
         public static void AreClose(double[,] expected, double[,] actual, double error)
+        {
+            Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
+            Assert.AreEqual(expected.GetLength(1), actual.GetLength(1));
+            for (var row = 0; row < expected.GetLength(0); ++row)
+            {
+                for (var col = 0; col < expected.GetLength(1); ++col)
+                {
+                    Assert.That(actual[row, col], Is.EqualTo(expected[row, col]).Within(error));
+                }
+            }
+        }
+
+        public static void AreClose(float[,] expected, float[,] actual, double error)
         {
             Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
             Assert.AreEqual(expected.GetLength(1), actual.GetLength(1));
