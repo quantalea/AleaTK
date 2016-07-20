@@ -105,6 +105,7 @@ namespace AleaTKTest
                 data[i] = darray.GetReal(i);
             return data;
         }
+
         public static int[] GetInt32Array(this MatFileReader reader, string name)
         {
             var marray = reader.GetMLArray(name);
