@@ -10,55 +10,66 @@ namespace AleaTK.ML.Operator
 
     public class LSTM<T> : Differentiable
     {
-        public LSTM(Variable<T> x, int hiddenSize)
+        public LSTM(Variable<T> x, int hiddenSize, Variable<T> cx = null, Variable<T> hx = null, double forgetBiasInit = 3.0)
         {
-            X = x;
-            HiddenSize = hiddenSize;
-
             // X shape (seqLength, batch, inputSize)
-            Util.EnsureEqual(3, X.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
+            Util.EnsureEqual(3, x.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
+            X = x;
             SeqLength = (int)X.Shape[0];
             InputSize = (int)X.Shape[2];
+            HiddenSize = hiddenSize;
+            ForgetBiasInit = forgetBiasInit;
 
             // Y Shape (seqLength, batch, hiddenSize)
             Y = Variable<T>(PartialShape.Create(SeqLength, -1, HiddenSize));
 
             // W (inputSize + hiddenSize + 1, 4 * hiddenSize)
-            //W = Parameter(Fill(Shape.Create(InputSize + hiddenSize + 1, 4*hiddenSize), ScalarOps.Conv<T>(0.0)));
             W =
-                Parameter(RandomUniform<T>(Shape.Create(InputSize + HiddenSize + 1, 4*HiddenSize))/
+                Parameter(RandomNormal<T>(Shape.Create(InputSize + HiddenSize + 1, 4*HiddenSize))/
                           (Math.Sqrt(InputSize + hiddenSize)).AsScalar<T>());
+            // the following W initialization happens in Initialize();
 
             Hin = AuxVariable<T>();
             Hout = AuxVariable<T>();
             IFOG = AuxVariable<T>();
             IFOGf = AuxVariable<T>();
-            PrevH = AuxVariable<T>();
-            PrevC = AuxVariable<T>();
             C = AuxVariable<T>();
             Ct = AuxVariable<T>();
+            Temp1 = AuxVariable<T>();
+            CX = cx ?? Variable<T>();
+            HX = hx ?? Variable<T>();
 
             AddInput(X);
             AddOutput(Y);
             AddInput(W);
+            AddInput(CX);
+            AddInput(HX);
             AddAuxVar(Hin);
             AddAuxVar(Hout);
             AddAuxVar(IFOG);
             AddAuxVar(IFOGf);
-            AddAuxVar(PrevH);
-            AddAuxVar(PrevC);
             AddAuxVar(C);
             AddAuxVar(Ct);
+            AddAuxVar(Temp1);
         }
 
         public override void Initialize(Executor executor)
         {
             base.Initialize(executor);
+
             // set bias to zero
             var ctx = executor.Context;
             var w = executor.GetTensor(W);
-            ctx.Assign(w.Slice(Range.Create(0), Range.All), 0.0.AsScalar<T>());
+            ctx.Assign(w.Slice(0), 0.0.AsScalar<T>());
+
+            if (ForgetBiasInit != 0.0)
+            {
+                ctx.Assign(w.Slice(0, Range(HiddenSize, HiddenSize*2)),
+                    Fill(Shape.Create(1, HiddenSize), ScalarOps.Conv<T>(ForgetBiasInit)));
+            }
         }
+
+        public double ForgetBiasInit { get; }
 
         public int SeqLength { get; }
 
@@ -72,6 +83,10 @@ namespace AleaTK.ML.Operator
 
         public Variable<T> W { get; }
 
+        public Variable<T> CX { get; }
+
+        public Variable<T> HX { get; }
+
         public Variable<T> Hin { get; }
 
         public Variable<T> Hout { get; }
@@ -80,13 +95,11 @@ namespace AleaTK.ML.Operator
 
         public Variable<T> IFOGf { get; }
 
-        public Variable<T> PrevH { get; }
-
-        public Variable<T> PrevC { get; }
-
         public Variable<T> C { get; }
 
         public Variable<T> Ct { get; }
+
+        public Variable<T> Temp1 { get; }
 
         public override void Forward(Executor executor)
         {
@@ -97,19 +110,23 @@ namespace AleaTK.ML.Operator
             var n = x.Shape[0];
             var d = HiddenSize;
 
+            var c0 = executor.GetTensor(CX);
+            var h0 = executor.GetTensor(HX);
+            Util.EnsureTrue(c0.Shape.SequenceEqual(Shape.Create(b, d)));
+            Util.EnsureTrue(h0.Shape.SequenceEqual(Shape.Create(b, d)));
+
             var hin = executor.GetTensor(Hin, Shape.Create(n, b, xphpb));
             var hout = executor.GetTensor(Hout, Shape.Create(n, b, d));
-            var prevh = executor.GetTensor(PrevH, Shape.Create(1, b, d));
             var ifog = executor.GetTensor(IFOG, Shape.Create(n, b, d*4));
             var ifogf = executor.GetTensor(IFOGf, Shape.Create(n, b, d*4));
             var c = executor.GetTensor(C, Shape.Create(n, b, d));
             var ct = executor.GetTensor(Ct, Shape.Create(n, b, d));
-            var prevc = executor.GetTensor(PrevC, Shape.Create(1, b, d));
 
             var ctx = executor.Context;
 
             for (var t = 0; t < n; ++t)
             {
+<<<<<<< 48ffa75a6d00ddbc17f3e7bf64bfec7edd6ceff2
                 ctx.Assign(prevh, t > 0 ? hout.Slice(Range.Create(t - 1), Range.All, Range.All) : 0.0.AsScalar<T>());
 
                 ctx.Assign(hin.Slice(Range.Create(t), Range.All, Range.Create(0)), Fill(Shape.Create(1, b, 1), ScalarOps.Conv<T>(1.0))); // bias
@@ -142,14 +159,136 @@ namespace AleaTK.ML.Operator
                 ctx.Assign(hout.Slice(Range.Create(t), Range.All, Range.All),
                     ifogf.Slice(Range.Create(t), Range.All, Range.Create(2 * d, 3 * d)) *
                     ct.Slice(Range.Create(t), Range.All, Range.All));
+=======
+                // stack input
+                var prevh = executor.GetTensor(Temp1, Shape.Create(1, b, d));
+                ctx.Assign(prevh, t > 0 ? hout.Slice(t - 1) : h0);
+                ctx.Assign(hin.Slice(t, -1, 0), Fill(Shape.Create(1, b, 1), ScalarOps.Conv<T>(1.0))); // bias
+                ctx.Assign(hin.Slice(t, -1, Range(1, InputSize + 1)), x.Slice(t));
+                ctx.Assign(hin.Slice(t, -1, Range(InputSize + 1, -1)), prevh);
+
+                // dot
+                ctx.Assign(ifog.Slice(t), Dot(hin.Slice(t).Reshape(b, xphpb), w));
+
+                // non-linearities
+                // first 3 matrices are ifo
+                ctx.Assign(ifogf.Slice(t, -1, Range(0, 3*d)), 
+                    1.0.AsScalar<T>() / (1.0.AsScalar<T>() + Exp(-ifog.Slice(t, -1, Range(0, 3*d)))));
+
+                // last one is for g(a)
+                ctx.Assign(ifogf.Slice(t, -1, Range(3*d, -1)), Tanh(ifog.Slice(t, -1, Range(3*d, -1))));
+
+                // update c
+                var prevc = executor.GetTensor(Temp1, Shape.Create(1, b, d));
+                ctx.Assign(prevc, t > 0 ? c.Slice(t - 1) : c0);
+                // c_t = i_t * a_t + f_t * c_t-1
+                ctx.Assign(c.Slice(t),
+                    ifogf.Slice(t, -1, Range(0, d)) * ifogf.Slice(t, -1, Range(3 * d, -1)) +
+                    ifogf.Slice(t, -1, Range(d, 2 * d)) * prevc);
+                // h_t = o_t * tanh(c_t)
+                ctx.Assign(ct.Slice(t), Tanh(c.Slice(t)));
+                ctx.Assign(hout.Slice(t), ifogf.Slice(t, -1, Range(2 * d, 3 * d)) * ct.Slice(t));
             }
 
             executor.AssignTensor(Y, hout);
         }
 
+        public static Tensor<T> GetZeroGradient(Executor executor, Variable<T> var)
+        {
+            var data = executor.GetData(var);
+            Util.EnsureTrue(data.GradientAggregationCounter == 0);
+            var tensor = executor.GetTensor(var);
+            executor.AssignGradientDirectly(var, Fill(tensor.Shape, ScalarOps.Conv<T>(0.0)));
+            return executor.GetGradient(var);
+        }
+
         public override void Backward(Executor executor)
         {
-            throw new NotImplementedException();
+            var ctx = executor.Context;
+
+            var dy = executor.GetGradient(Y); // input
+            var w = executor.GetTensor(W);
+            var x = executor.GetTensor(X);
+            var c = executor.GetTensor(C);
+            var ct = executor.GetTensor(Ct);
+            var hin = executor.GetTensor(Hin);
+            var hout = executor.GetTensor(Hout);
+            var ifogf = executor.GetTensor(IFOGf);
+            var n = hout.Shape[0];
+            var b = hout.Shape[1];
+            var d = (int)hout.Shape[2];
+
+            var c0 = executor.GetTensor(CX);
+            var h0 = executor.GetTensor(HX);
+            Util.EnsureTrue(c0.Shape.SequenceEqual(Shape.Create(b, d)));
+            Util.EnsureTrue(h0.Shape.SequenceEqual(Shape.Create(b, d)));
+
+            var dc = GetZeroGradient(executor, C);
+            var dx = GetZeroGradient(executor, X);
+            var dw = GetZeroGradient(executor, W);
+            var dIFOG = GetZeroGradient(executor, IFOG);
+            var dIFOGf = GetZeroGradient(executor, IFOGf);
+            var dhin = GetZeroGradient(executor, Hin);
+            var dhout = GetZeroGradient(executor, Hout);
+            var dh0 = GetZeroGradient(executor, HX);
+            var dc0 = GetZeroGradient(executor, CX);
+
+            ctx.Assign(dhout, dy);
+
+            // TODO: dcn and dhn
+            // now all are 0!
+
+            for (var t = n - 1; t >= 0; --t)
+            {
+                var tanhCt = ct.Slice(t);
+
+                // do_t = dh_t * tanh(c_t)
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(2*d, 3*d)), tanhCt*dhout.Slice(t));
+
+                // dc_t += dh_t * o_t * (1 - tanh**2(c_t))
+                ctx.Assign(dc.Slice(t),
+                    dc.Slice(t) +
+                    (1.0.AsScalar<T>() - tanhCt*tanhCt)*(ifogf.Slice(t, -1, Range(2*d, 3*d))*dhout.Slice(t)));
+
+                // df_t = dc_t * c_t-1
+                if (t > 0)
+                {
+                    ctx.Assign(dIFOGf.Slice(t, -1, Range(d, 2*d)), c.Slice(t - 1)*dc.Slice(t));
+                    ctx.Assign(dc.Slice(t - 1), dc.Slice(t - 1) + ifogf.Slice(t, -1, Range(d, 2*d))*dc.Slice(t));
+                }
+                else
+                {
+                    ctx.Assign(dIFOGf.Slice(t, -1, Range(d, 2*d)), c0*dc.Slice(t));
+                    ctx.Assign(dc0, (ifogf.Slice(t, -1, Range(d, 2*d))*dc.Slice(t)).Reshape(b, d));
+                }
+                // di_t = dc_t * a_t
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(0, d)), ifogf.Slice(t, -1, Range(3*d, -1))*dc.Slice(t));
+                // da_t = dc_t * i_t
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(3*d, -1)), ifogf.Slice(t, -1, Range(0, d))*dc.Slice(t));
+
+                // backprop activation functions
+                var tmp1 = ifogf.Slice(t, -1, Range(3*d, -1));
+                ctx.Assign(dIFOG.Slice(t, -1, Range(3*d, -1)), (1.0.AsScalar<T>() - tmp1 * tmp1)*dIFOGf.Slice(t, -1, Range(3*d, -1)));
+                var tmp2 = ifogf.Slice(t, -1, Range(0, 3*d));
+                ctx.Assign(dIFOG.Slice(t, -1, Range(0, 3*d)),
+                    (tmp2*(1.0.AsScalar<T>() - tmp2))*dIFOGf.Slice(t, -1, Range(0, 3*d)));
+
+                // backprop matrix multiply
+                ctx.Assign(dw, dw + Dot(hin.Slice(t).T, dIFOG.Slice(t)));
+                ctx.Assign(dhin.Slice(t), Dot(dIFOG.Slice(t), w.T));
+
+                // backprop the identity transforms into hin
+                ctx.Assign(dx.Slice(t), dhin.Slice(t, -1, Range(1, InputSize + 1)));
+                if (t > 0)
+                {
+                    ctx.Assign(dhout.Slice(t - 1), dhout.Slice(t - 1) + dhin.Slice(t, -1, Range(InputSize + 1, -1)));
+                }
+                else
+                {
+                    ctx.Assign(dh0, dh0 + dhin.Slice(t, -1, Range(InputSize + 1, -1)));
+                }
+>>>>>>> 89707ada1ea7cf18d1d9ec732073f0aec84dd67d
+            }
         }
     }
 
@@ -182,6 +321,8 @@ namespace AleaTK.ML.Operator
             var strides = Strides.Create(shape[1]*shape[2], shape[2], 1); // inner change most
             HX = Library.Variable<T>(shape);
             CX = Library.Variable<T>(shape);
+            //HX = Parameter(Fill(Shape.Create(NumLayers, MiniBatch, HiddenSize), ScalarOps.Conv<T>(0.0)));
+            //CX = Parameter(Fill(Shape.Create(NumLayers, MiniBatch, HiddenSize), ScalarOps.Conv<T>(0.0)));
             HY = Library.Variable<T>(shape);
             CY = Library.Variable<T>(shape);
             StateDesc = new TensorDescriptor();
@@ -207,6 +348,8 @@ namespace AleaTK.ML.Operator
             AddOutput(Y);
             AddAuxVar(HX);
             AddAuxVar(CX);
+            //AddInput(HX);
+            //AddInput(CX);
             AddAuxVar(HY);
             AddAuxVar(CY);
             AddAuxVar(DropoutStates);
@@ -278,6 +421,7 @@ namespace AleaTK.ML.Operator
             {
                 executor.AssignGradientDirectly(HY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
                 executor.AssignGradientDirectly(CY, AleaTK.Library.Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(value)));
+                executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
             }
         }
 
@@ -363,12 +507,13 @@ namespace AleaTK.ML.Operator
 
                         filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
                         length = filterDimA.Aggregate(ScalarOps.Mul);
-                        var value = 1.0/length;
+                        //var value = 1.0/length;
 
                         var linLayerMatBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)),
                             linLayerMat);
                         var linLayerMatTensor = new Tensor<T>(linLayerMatBuffer);
-                        context.Assign(linLayerMatTensor, ScalarOps.Conv<T>(value));
+                        //context.Assign(linLayerMatTensor, ScalarOps.Conv<T>(value));
+                        context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length))/(Math.Sqrt(HiddenSize+InputSize).AsScalar<T>()));
 
                         deviceptr<T> linLayerBias;
                         dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId,
@@ -386,6 +531,21 @@ namespace AleaTK.ML.Operator
             }
 
             base.Initialize(executor);
+
+            const double value = 0.0;
+
+            executor.AssignTensor(HX, AleaTK.Library.Fill(Shape.Create(HX.Shape.AsArray), ScalarOps.Conv<T>(value)));
+            executor.AssignTensor(CX, AleaTK.Library.Fill(Shape.Create(CX.Shape.AsArray), ScalarOps.Conv<T>(value)));
+            executor.AssignTensor(HY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
+            executor.AssignTensor(CY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
+
+            // we assign them directly (no gradient counter increasing)
+            if (IsTraining)
+            {
+                executor.AssignGradientDirectly(HY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
+                executor.AssignGradientDirectly(CY, AleaTK.Library.Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(value)));
+                executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
+            }
         }
 
         public override void Forward(Executor executor)
@@ -412,11 +572,13 @@ namespace AleaTK.ML.Operator
 
             if (IsTraining)
             {
-                executor.AssignTensor(HX, hy);
-                executor.AssignTensor(CX, cy);
+                //executor.AssignTensor(HX, hy);
+                //executor.AssignTensor(CX, cy);
+                executor.AssignTensor(HX, Fill(hx.Shape, ScalarOps.Conv<T>(0.0)));
+                executor.AssignTensor(CX, Fill(cx.Shape, ScalarOps.Conv<T>(0.0)));
 
                 //executor.Context.Eval(cx.Reshape(-1)).Print();
-                
+
                 var reserveSpace = executor.GetTensor(ReserveSpace);
                 dnn.RNNForwardTraining(
                     rnnDesc, seqLength, xDesc, x.Buffer.Ptr, hxDesc, hx.Buffer.Ptr,
@@ -470,9 +632,11 @@ namespace AleaTK.ML.Operator
                 YDesc,
                 executor.GetGradient(Y).Buffer.Ptr,
                 StateDesc,
-                executor.GetGradient(HY).Buffer.Ptr,
+                //executor.GetGradient(HY).Buffer.Ptr,
+                new deviceptr<T>(), 
                 StateDesc,
-                executor.GetGradient(CY).Buffer.Ptr,
+                //executor.GetGradient(CY).Buffer.Ptr,
+                new deviceptr<T>(), 
                 executor.FilterDescDict[WDesc],
                 executor.GetTensor(W).Buffer.Ptr,
                 StateDesc,

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Alea;
 
@@ -90,6 +91,25 @@ namespace AleaTK
 
         public Tensor<TValue> Slice(params Range[] ranges)
         {
+            Util.EnsureTrue(Shape.Rank >= ranges.Length);
+
+            if (Shape.Rank > ranges.Length)
+            {
+                var newRanges = new List<Range>();
+                for (var i = 0; i < Shape.Rank; ++i)
+                {
+                    if (i < ranges.Length)
+                    {
+                        newRanges.Add(ranges[i]);
+                    }
+                    else
+                    {
+                        newRanges.Add(-1);
+                    }
+                }
+                ranges = newRanges.ToArray();
+            }
+
             Util.EnsureTrue(Shape.Rank == ranges.Length);
 
             var rank = Shape.Rank;

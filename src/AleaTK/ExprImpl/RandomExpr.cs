@@ -4,11 +4,6 @@ using Alea.cuRAND;
 
 namespace AleaTK.ExprImpl
 {
-    public enum RandomDistribution
-    {
-        Uniform = 0
-    }
-
     public enum PseudoRandomType
     {
         Default = 0
@@ -16,22 +11,12 @@ namespace AleaTK.ExprImpl
 
     public class PseudoRandomExpr<T> : LExpr<T>
     {
-        public PseudoRandomExpr(Shape shape, PseudoRandomType type, RandomDistribution randomDistribution, ulong seed, ulong offset, string opCode = OpCodes.Random)
+        public PseudoRandomExpr(Shape shape, PseudoRandomType type, Distribution distribution, ulong seed, ulong offset, string opCode = OpCodes.Random)
         {
             OpCode = opCode;
             Shape = shape;
             Seed = seed;
-            RandomDistribution = randomDistribution;
-            Offset = offset;
-            Type = type;
-        }
-
-        public PseudoRandomExpr(PseudoRandomType type, RandomDistribution randomDistribution, ulong seed, ulong offset, string opCode = OpCodes.Random)
-        {
-            OpCode = opCode;
-            Shape = null;
-            Seed = seed;
-            RandomDistribution = randomDistribution;
+            Distribution = distribution;
             Offset = offset;
             Type = type;
         }
@@ -53,7 +38,7 @@ namespace AleaTK.ExprImpl
 
         public PseudoRandomType Type { get; }
 
-        public RandomDistribution RandomDistribution { get; }
+        public Distribution Distribution { get; }
 
         public ulong Seed { get; }
 
@@ -79,43 +64,61 @@ namespace AleaTK.ExprImpl
                     if (typeof(T) == typeof(double))
                     {
                         var ptr = output.Buffer.Ptr.Reinterpret<double>();
-                        switch (RandomDistribution)
+
+                        if (Distribution is UniformDistribution)
                         {
-                            case RandomDistribution.Uniform:
-                                rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length);
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
+                            rng.GenerateUniform(ptr, (ulong) output.Layout.Shape.Length);
+                            return true;
                         }
-                        return true;
+
+                        if (Distribution is NormalDistribution)
+                        {
+                            var dist = Distribution as NormalDistribution;
+                            rng.GenerateNormal(ptr, (ulong) output.Layout.Shape.Length, dist.Mean, dist.Stddev);
+                            return true;
+                        }
+
+                        throw new InvalidOperationException();
                     }
 
                     if (typeof(T) == typeof(float))
                     {
                         var ptr = output.Buffer.Ptr.Reinterpret<float>();
-                        switch (RandomDistribution)
+
+                        if (Distribution is UniformDistribution)
                         {
-                            case RandomDistribution.Uniform:
-                                rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length);
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
+                            rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length);
+                            return true;
                         }
-                        return true;
+
+                        if (Distribution is NormalDistribution)
+                        {
+                            var dist = Distribution as NormalDistribution;
+                            rng.GenerateNormal(ptr, (ulong)output.Layout.Shape.Length, (float)dist.Mean, (float)dist.Stddev);
+                            return true;
+                        }
+
+                        throw new InvalidOperationException();
                     }
 
                     if (typeof(T) == typeof(double2))
                     {
                         var ptr = output.Buffer.Ptr.Reinterpret<double>();
-                        switch (RandomDistribution)
+
+                        if (Distribution is UniformDistribution)
                         {
-                            case RandomDistribution.Uniform:
-                                rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length * 2UL);
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
+                            rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length * 2UL);
+                            return true;
                         }
-                        return true;
+
+                        if (Distribution is NormalDistribution)
+                        {
+                            var dist = Distribution as NormalDistribution;
+                            rng.GenerateNormal(ptr, (ulong)output.Layout.Shape.Length * 2UL, dist.Mean, dist.Stddev);
+                            return true;
+                        }
+
+                        throw new InvalidOperationException();
                     }
                 }
             }
@@ -131,43 +134,61 @@ namespace AleaTK.ExprImpl
                     if (typeof(T) == typeof(double))
                     {
                         var ptr = output.Buffer.Ptr.Reinterpret<double>();
-                        switch (RandomDistribution)
+
+                        if (Distribution is UniformDistribution)
                         {
-                            case RandomDistribution.Uniform:
-                                rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length);
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
+                            rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length);
+                            return true;
                         }
-                        return true;
+
+                        if (Distribution is NormalDistribution)
+                        {
+                            var dist = Distribution as NormalDistribution;
+                            rng.GenerateNormal(ptr, (ulong)output.Layout.Shape.Length, dist.Mean, dist.Stddev);
+                            return true;
+                        }
+
+                        throw new InvalidOperationException();
                     }
 
                     if (typeof(T) == typeof(float))
                     {
                         var ptr = output.Buffer.Ptr.Reinterpret<float>();
-                        switch (RandomDistribution)
+
+                        if (Distribution is UniformDistribution)
                         {
-                            case RandomDistribution.Uniform:
-                                rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length);
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
+                            rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length);
+                            return true;
                         }
-                        return true;
+
+                        if (Distribution is NormalDistribution)
+                        {
+                            var dist = Distribution as NormalDistribution;
+                            rng.GenerateNormal(ptr, (ulong)output.Layout.Shape.Length, (float)dist.Mean, (float)dist.Stddev);
+                            return true;
+                        }
+
+                        throw new InvalidOperationException();
                     }
 
                     if (typeof(T) == typeof(double2))
                     {
                         var ptr = output.Buffer.Ptr.Reinterpret<double>();
-                        switch (RandomDistribution)
+
+                        if (Distribution is UniformDistribution)
                         {
-                            case RandomDistribution.Uniform:
-                                rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length * 2UL);
-                                break;
-                            default:
-                                throw new ArgumentOutOfRangeException();
+                            rng.GenerateUniform(ptr, (ulong)output.Layout.Shape.Length * 2UL);
+                            return true;
                         }
-                        return true;
+
+                        if (Distribution is NormalDistribution)
+                        {
+                            var dist = Distribution as NormalDistribution;
+                            rng.GenerateNormal(ptr, (ulong)output.Layout.Shape.Length * 2UL, dist.Mean, dist.Stddev);
+                            return true;
+                        }
+
+                        throw new InvalidOperationException();
                     }
                 }
             }

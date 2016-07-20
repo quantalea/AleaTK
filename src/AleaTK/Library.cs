@@ -176,6 +176,11 @@ namespace AleaTK
                 OpCodes.TakeGrad, typeof(int), typeof(float));
         }
 
+        public static Range Range(int beginInclusive, int endExclusive)
+        {
+            return AleaTK.Range.Create(beginInclusive, endExclusive);
+        }
+
         #region Tensor creation (allocate or reference)
         public static Tensor<T> Allocate<T>(this Device device, Layout layout, long length)
         {
@@ -572,18 +577,18 @@ namespace AleaTK
             return ReduceSum(a, reductionIndices) / (a.Shape.Length.AsScalar<T>());
         }
 
-        public static Expr<T> RandomUniform<T>(ulong? seed = null, ulong? offset = null, PseudoRandomType type = PseudoRandomType.Default)
+        public static Expr<T> RandomUniform<T>(Shape shape = null, ulong? seed = null, ulong offset = 0UL,
+            PseudoRandomType type = PseudoRandomType.Default)
         {
             seed = seed ?? ((ulong) DateTime.Now.Ticks);
-            offset = offset ?? 0UL;
-            return new PseudoRandomExpr<T>(type, RandomDistribution.Uniform, seed.Value, offset.Value);
+            return new PseudoRandomExpr<T>(shape, type, new UniformDistribution(), seed.Value, offset);
         }
 
-        public static Expr<T> RandomUniform<T>(Shape shape, ulong? seed = null, ulong? offset = null, PseudoRandomType type = PseudoRandomType.Default)
+        public static Expr<T> RandomNormal<T>(Shape shape = null, ulong? seed = null, ulong offset = 0UL,
+            double mean = 0.0, double stddev = 1.0, PseudoRandomType type = PseudoRandomType.Default)
         {
             seed = seed ?? ((ulong)DateTime.Now.Ticks);
-            offset = offset ?? 0UL;
-            return new PseudoRandomExpr<T>(shape, type, RandomDistribution.Uniform, seed.Value, offset.Value);
+            return new PseudoRandomExpr<T>(shape, type, new NormalDistribution(mean, stddev), seed.Value, offset);
         }
 
         public static Expr<T> Dot<T>(Expr<T> a, Expr<T> b)

@@ -111,6 +111,32 @@ namespace AleaTK
         #endregion
     }
 
+    public abstract class Distribution
+    {
+    }
+
+    public sealed class UniformDistribution : Distribution
+    {
+    }
+
+    public sealed class NormalDistribution : Distribution
+    {
+        public readonly double Mean;
+        public readonly double Stddev;
+
+        public NormalDistribution()
+        {
+            Mean = 0.0;
+            Stddev = 1.0;
+        }
+
+        public NormalDistribution(double mean, double stddev)
+        {
+            Mean = mean;
+            Stddev = stddev;
+        }
+    }
+
     public struct Range
     {
         public readonly long Begin;
@@ -122,6 +148,26 @@ namespace AleaTK
             Begin = begin;
             End = end;
             Step = step;
+        }
+
+        //public static implicit operator Range(int idx)
+        //{
+        //    if (idx >= 0)
+        //    {
+        //        return Range.Create(idx);
+        //    }
+
+        //    return All;
+        //}
+
+        public static implicit operator Range(long idx)
+        {
+            if (idx >= 0)
+            {
+                return Range.Create(idx);
+            }
+
+            return All;
         }
 
         public static Range All = new Range(0, -1, 1);

@@ -34,7 +34,7 @@ namespace Tutorial.Samples
                 Console.WriteLine($"Batch {i}");
                 // generates random numbers, apply the mapping followed by a mean reduction
                 var offset = batchSize * (ulong)i;
-                ctx.Assign(points, RandomUniform<double2>(seed, offset));
+                ctx.Assign(points, RandomUniform<double2>(seed: seed, offset: offset));
                 ctx.Assign(pi, i == 0 ? ReduceMean(pis) : (pi + ReduceMean(pis)) / 2.0);
             }
 
