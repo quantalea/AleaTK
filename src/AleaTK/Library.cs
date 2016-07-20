@@ -146,6 +146,24 @@ namespace AleaTK
                 OpCodes.ReduceMax, typeof(float));
             #endregion
 
+            ExprRegistry.Register<float>(
+                (exprParam, inputExprs) =>
+                {
+                    uint threshold = exprParam.Threshold;
+                    double scale = exprParam.Scale;
+                    return Map(inputExprs[0].CastExpr<float>(), inputExprs[1].CastExpr<uint>(),
+                        (invalue, mask) => (float)(mask > threshold ? invalue * scale : 0.0f), OpCodes.Dropout);
+                }, OpCodes.Dropout, typeof(float), typeof(uint));
+
+            ExprRegistry.Register<double>(
+                (exprParam, inputExprs) =>
+                {
+                    uint threshold = exprParam.Threshold;
+                    double scale = exprParam.Scale;
+                    return Map(inputExprs[0].CastExpr<double>(), inputExprs[1].CastExpr<uint>(),
+                        (invalue, mask) => (double)(mask > threshold ? invalue * scale : 0.0), OpCodes.Dropout);
+                }, OpCodes.Dropout, typeof(double), typeof(uint));
+
             ExprRegistry.Register<double>(
                 (exprParam, inputExprs) =>
                     Map(inputExprs[0].CastExpr<double>(), x => x > 0.0 ? 1.0 : 0.0, OpCodes.ReLUGrad),
@@ -604,6 +622,12 @@ namespace AleaTK
         public static Expr<T> TakeGrad<T>(Expr<int> indices, Expr<T> outputGrad, int sourceRows)
         {
             return ExprRegistry.Create<T>(OpCodes.TakeGrad, new {SourceRows = sourceRows}, indices, outputGrad);
+        }
+
+        public static Expr<T> Dropout<T>(Expr<T> invalue, Expr<uint> mask, uint threshold, double scale)
+        {
+            return ExprRegistry.Create<T>(OpCodes.Dropout, new {Threshold = threshold, Scale = scale}, invalue,
+                mask);
         }
         #endregion
     }

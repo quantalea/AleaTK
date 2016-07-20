@@ -120,6 +120,19 @@ namespace AleaTK.ExprImpl
 
                         throw new InvalidOperationException();
                     }
+
+                    if (typeof(T) == typeof(uint) || typeof(T) == typeof(int))
+                    {
+                        var ptr = output.Buffer.Ptr.Reinterpret<uint>();
+
+                        if (Distribution is UniformDistribution)
+                        {
+                            rng.Generate(ptr, (ulong)output.Layout.Shape.Length);
+                            return true;
+                        }
+
+                        throw new InvalidOperationException();
+                    }
                 }
             }
 
@@ -185,6 +198,19 @@ namespace AleaTK.ExprImpl
                         {
                             var dist = Distribution as NormalDistribution;
                             rng.GenerateNormal(ptr, (ulong)output.Layout.Shape.Length * 2UL, dist.Mean, dist.Stddev);
+                            return true;
+                        }
+
+                        throw new InvalidOperationException();
+                    }
+
+                    if (typeof(T) == typeof(uint) || typeof(T) == typeof(int))
+                    {
+                        var ptr = output.Buffer.Ptr.Reinterpret<uint>();
+
+                        if (Distribution is UniformDistribution)
+                        {
+                            rng.Generate(ptr, (ulong)output.Layout.Shape.Length);
                             return true;
                         }
 

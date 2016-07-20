@@ -64,6 +64,7 @@ namespace AleaTK
         public const string ReShape = "ReShape";
         public const string Tanh = "Tanh";
         public const string TakeGrad = "TakeGrad";
+        public const string Dropout = "Dropout";
     }
 
     public abstract class Expr : Disposable

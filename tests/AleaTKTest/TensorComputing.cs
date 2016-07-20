@@ -1279,5 +1279,19 @@ namespace AleaTKTest
 
             Assert.That(mean.ToScalar(), Is.EqualTo(0.0).Within(1e-2));
         }
+
+        [Test]
+        public static void DropoutForwardGpu()
+        {
+            var ctx = gpu;
+
+            var data = ctx.Allocate(new[] {1.0f, 2.0f, 3.0f, 4.0f});
+            var mask = ctx.Allocate(new[] {6U, 3U, 9U, 2U});
+            var threshold = 5U;
+            var scale = 2.0;
+            var result = ctx.Eval(Dropout(data, mask, threshold, scale));
+            result.Print();
+        }
+
     }
 }
