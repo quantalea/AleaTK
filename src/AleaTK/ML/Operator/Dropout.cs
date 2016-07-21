@@ -7,7 +7,7 @@ using static AleaTK.ML.Library;
 namespace AleaTK.ML.Operator
 {
     /// <summary>
-    /// With probability (1 - dropoutProb)  outputs the input element scaled up by 1 / (1 - dropoutProb), 
+    /// With probability (1 - dropoutProb) outputs the input element scaled up by 1 / (1 - dropoutProb), 
     /// otherwise outputs 0. The scaling is so that the expected sum is unchanged.
     /// </summary>
     public class Dropout<T> : Differentiable
