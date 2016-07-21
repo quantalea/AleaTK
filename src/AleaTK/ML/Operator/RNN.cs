@@ -389,7 +389,7 @@ namespace AleaTK.ML.Operator
             {
                 executor.AssignGradientDirectly(HY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
                 executor.AssignGradientDirectly(CY, AleaTK.Library.Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(value)));
-                executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
+                //executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
             }
         }
 
@@ -481,7 +481,8 @@ namespace AleaTK.ML.Operator
                             linLayerMat);
                         var linLayerMatTensor = new Tensor<T>(linLayerMatBuffer);
                         //context.Assign(linLayerMatTensor, ScalarOps.Conv<T>(value));
-                        context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length))/(Math.Sqrt(HiddenSize+InputSize).AsScalar<T>()));
+                        //context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length))/(Math.Sqrt(HiddenSize+InputSize).AsScalar<T>()));
+                        context.Assign(linLayerMatTensor, RandomUniform<T>(Shape.Create(length)) *0.1.AsScalar<T>() - 0.05.AsScalar<T>());
 
                         deviceptr<T> linLayerBias;
                         dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId,
@@ -512,7 +513,7 @@ namespace AleaTK.ML.Operator
             {
                 executor.AssignGradientDirectly(HY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
                 executor.AssignGradientDirectly(CY, AleaTK.Library.Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(value)));
-                executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
+                //executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
             }
         }
 
@@ -540,10 +541,10 @@ namespace AleaTK.ML.Operator
 
             if (IsTraining)
             {
-                //executor.AssignTensor(HX, hy);
-                //executor.AssignTensor(CX, cy);
-                executor.AssignTensor(HX, Fill(hx.Shape, ScalarOps.Conv<T>(0.0)));
-                executor.AssignTensor(CX, Fill(cx.Shape, ScalarOps.Conv<T>(0.0)));
+                executor.AssignTensor(HX, hy);
+                executor.AssignTensor(CX, cy);
+                //executor.AssignTensor(HX, Fill(hx.Shape, ScalarOps.Conv<T>(0.0)));
+                //executor.AssignTensor(CX, Fill(cx.Shape, ScalarOps.Conv<T>(0.0)));
 
                 //executor.Context.Eval(cx.Reshape(-1)).Print();
 

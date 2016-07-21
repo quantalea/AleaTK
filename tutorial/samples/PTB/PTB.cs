@@ -267,8 +267,8 @@ namespace Tutorial.Samples
 
             public void CopyWeightsFrom(Model o)
             {
-                Optimizer.AssignTensor(RNN.CX, o.Optimizer.GetTensor(o.RNN.CX));
-                Optimizer.AssignTensor(RNN.HX, o.Optimizer.GetTensor(o.RNN.HX));
+                //Optimizer.AssignTensor(RNN.CX, o.Optimizer.GetTensor(o.RNN.CX));
+                //Optimizer.AssignTensor(RNN.HX, o.Optimizer.GetTensor(o.RNN.HX));
                 Optimizer.AssignTensor(Embedding.Weights, o.Optimizer.GetTensor(o.Embedding.Weights));
                 Optimizer.AssignTensor(RNN.W, o.Optimizer.GetTensor(o.RNN.W));
                 Optimizer.AssignTensor(FC.Weights, o.Optimizer.GetTensor(o.FC.Weights));
@@ -436,7 +436,7 @@ namespace Tutorial.Samples
                     }
                     Console.WriteLine();
 
-                    //modelInteractive.RNN.InitializeStates(modelInteractive.Optimizer);
+                    modelInteractive.RNN.InitializeStates(modelInteractive.Optimizer);
                     modelInteractive.Optimizer.AssignTensor(modelInteractive.Inputs, inputs.AsTensor());
                     modelInteractive.Optimizer.Forward();
 

@@ -1293,5 +1293,13 @@ namespace AleaTKTest
             result.Print();
         }
 
+        [Test]
+        public static void RandomUniformGpu()
+        {
+            var ctx = gpu;
+
+            var data = ctx.Eval((2.0f.AsScalar() * RandomUniform<float>(Shape.Create(10, 10)) - 1.0f.AsScalar()) * 5.0f.AsScalar());
+            data.Print();
+        }
     }
 }
