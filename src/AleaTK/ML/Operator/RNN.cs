@@ -272,27 +272,28 @@ namespace AleaTK.ML.Operator
             Dropout = dropout;
             DropoutSeed = dropoutSeed;
 
-            // X shape (batch, seqLength, inputSize)
-            Util.EnsureEqual(3, X.Shape.Rank, "Input layout: (batch, seqLength, inputSize)");
-            MiniBatch = (int) X.Shape[0];
-            SeqLength = (int) X.Shape[1];
+            // X shape (seqLength, batch, inputSize)
+            Util.EnsureEqual(3, X.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
+            Util.EnsureTrue(X.Shape[0] >= 0, "Input layout: (seqLength, batch, inputSize)");
+            Util.EnsureTrue(X.Shape[1] >= 0, "Input layout: (seqLength, batch, inputSize)");
+            Util.EnsureTrue(X.Shape[2] >= 0, "Input layout: (seqLength, batch, inputSize)");
+            SeqLength = (int) X.Shape[0];
+            MiniBatch = (int) X.Shape[1];
             InputSize = (int) X.Shape[2];
 
-            // Y Shape (batch, seqLength, hiddenSize)
-            Y = Library.Variable<T>(PartialShape.Create(MiniBatch, SeqLength, HiddenSize));
+            // Y Shape (seqLength, batch, hiddenSize)
+            Y = Variable<T>(PartialShape.Create(SeqLength, MiniBatch, HiddenSize));
 
             // W shape will be determined during initialization
-            W = Library.Parameter<T>();
+            W = Parameter<T>();
 
             // state variables
             var shape = PartialShape.Create(NumLayers, MiniBatch, HiddenSize);
             var strides = Strides.Create(shape[1]*shape[2], shape[2], 1); // inner change most
-            HX = Library.Variable<T>(shape);
-            CX = Library.Variable<T>(shape);
-            //HX = Parameter(Fill(Shape.Create(NumLayers, MiniBatch, HiddenSize), ScalarOps.Conv<T>(0.0)));
-            //CX = Parameter(Fill(Shape.Create(NumLayers, MiniBatch, HiddenSize), ScalarOps.Conv<T>(0.0)));
-            HY = Library.Variable<T>(shape);
-            CY = Library.Variable<T>(shape);
+            HX = Variable<T>(shape);
+            CX = Variable<T>(shape);
+            HY = Variable<T>(shape);
+            CY = Variable<T>(shape);
             StateDesc = new TensorDescriptor();
             StateDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
 
@@ -316,8 +317,6 @@ namespace AleaTK.ML.Operator
             AddOutput(Y);
             AddAuxVar(HX);
             AddAuxVar(CX);
-            //AddInput(HX);
-            //AddInput(CX);
             AddAuxVar(HY);
             AddAuxVar(CY);
             AddAuxVar(DropoutStates);
@@ -375,24 +374,6 @@ namespace AleaTK.ML.Operator
 
         public readonly Symbol RnnDesc = new Symbol();
 
-        public void InitializeStates(Executor executor)
-        {
-            const double value = 0.0;
-
-            executor.AssignTensor(HX, AleaTK.Library.Fill(Shape.Create(HX.Shape.AsArray), ScalarOps.Conv<T>(value)));
-            executor.AssignTensor(CX, AleaTK.Library.Fill(Shape.Create(CX.Shape.AsArray), ScalarOps.Conv<T>(value)));
-            executor.AssignTensor(HY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
-            executor.AssignTensor(CY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
-
-            // we assign them directly (no gradient counter increasing)
-            if (IsTraining)
-            {
-                executor.AssignGradientDirectly(HY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
-                executor.AssignGradientDirectly(CY, AleaTK.Library.Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(value)));
-                //executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
-            }
-        }
-
         public override void Initialize(Executor executor)
         {
             var context = executor.Context.ToGpuContext();
@@ -418,7 +399,6 @@ namespace AleaTK.ML.Operator
             Util.EnsureTrue(weightsSize.ToInt64()%Gpu.SizeOf<T>() == 0);
             var shapeW = Shape.Create(weightsSize.ToInt64()/Alea.Gpu.SizeOf<T>(), 1, 1);
             wDesc.SetND(Dnn.DataTypeOf<T>(), TensorFormat.CUDNN_TENSOR_NCHW, shapeW.AsInt32Array);
-            //Console.WriteLine($"RNN.W.Shape: {shapeW}");
 
             // workspace and rreservespace
             IntPtr workSize;
@@ -448,8 +428,6 @@ namespace AleaTK.ML.Operator
                 executor.GetGradient(Y, (Shape.Create(Y.Shape.AsArray)));
                 executor.GetGradient(HX, (Shape.Create(HX.Shape.AsArray)));
                 executor.GetGradient(CX, (Shape.Create(CX.Shape.AsArray)));
-                executor.GetGradient(HY, (Shape.Create(HY.Shape.AsArray)));
-                executor.GetGradient(CY, (Shape.Create(CY.Shape.AsArray)));
             }
 
             // set LSTM weights
@@ -458,6 +436,7 @@ namespace AleaTK.ML.Operator
             using (var filterDesc = new FilterDescriptor())
             {
                 var w = executor.GetTensor(W);
+                //Console.WriteLine($"w: {w.Buffer.Ptr.Handle}");
                 var filterDimA = new int[3];
 
                 for (var layer = 0; layer < NumLayers; ++layer)
@@ -480,9 +459,12 @@ namespace AleaTK.ML.Operator
                         var linLayerMatBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)),
                             linLayerMat);
                         var linLayerMatTensor = new Tensor<T>(linLayerMatBuffer);
+                        //var offset = (linLayerMatTensor.Buffer.Ptr.Handle.ToInt64() - w.Buffer.Ptr.Handle.ToInt64())/Gpu.SizeOf<T>();
+                        //Console.WriteLine($"w.{layer}.{linLayerId}: {offset} {nbDims} {Shape.Create(filterDimA.Select(ll => (long)ll).ToArray())} {dataType} {format}");
                         //context.Assign(linLayerMatTensor, ScalarOps.Conv<T>(value));
-                        //context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length))/(Math.Sqrt(HiddenSize+InputSize).AsScalar<T>()));
-                        context.Assign(linLayerMatTensor, RandomUniform<T>(Shape.Create(length)) *0.1.AsScalar<T>() - 0.05.AsScalar<T>());
+                        context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length))/(Math.Sqrt(HiddenSize+InputSize).AsScalar<T>()));
+                        //context.Assign(linLayerMatTensor, RandomUniform<T>(Shape.Create(length)) *0.1.AsScalar<T>() - 0.05.AsScalar<T>());
+                        //context.Assign(linLayerMatTensor, 0.1.AsScalar<T>());
 
                         deviceptr<T> linLayerBias;
                         dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId,
@@ -494,7 +476,11 @@ namespace AleaTK.ML.Operator
                         var linLayerBiasBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)),
                             linLayerBias);
                         var linLayerBiasTensor = new Tensor<T>(linLayerBiasBuffer);
+                        //offset = (linLayerBiasTensor.Buffer.Ptr.Handle.ToInt64() - w.Buffer.Ptr.Handle.ToInt64())/Gpu.SizeOf<T>();
+                        //Console.WriteLine($"b.{layer}.{linLayerId}: {offset} {nbDims} {Shape.Create(filterDimA.Select(ll => (long)ll).ToArray())} {dataType} {format}");
+                        // TODO: need check, there are 8 matrices, but usually you only need set 4 of them
                         context.Assign(linLayerBiasTensor, ScalarOps.Conv<T>(Bias));
+                        //context.Assign(linLayerBiasTensor, 0.0.AsScalar<T>());
                     }
                 }
             }
@@ -502,19 +488,8 @@ namespace AleaTK.ML.Operator
             base.Initialize(executor);
 
             const double value = 0.0;
-
-            executor.AssignTensor(HX, AleaTK.Library.Fill(Shape.Create(HX.Shape.AsArray), ScalarOps.Conv<T>(value)));
-            executor.AssignTensor(CX, AleaTK.Library.Fill(Shape.Create(CX.Shape.AsArray), ScalarOps.Conv<T>(value)));
-            executor.AssignTensor(HY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
-            executor.AssignTensor(CY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
-
-            // we assign them directly (no gradient counter increasing)
-            if (IsTraining)
-            {
-                executor.AssignGradientDirectly(HY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(value)));
-                executor.AssignGradientDirectly(CY, AleaTK.Library.Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(value)));
-                //executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
-            }
+            executor.AssignTensor(HX, Fill(Shape.Create(HX.Shape.AsArray), ScalarOps.Conv<T>(value)));
+            executor.AssignTensor(CX, Fill(Shape.Create(CX.Shape.AsArray), ScalarOps.Conv<T>(value)));
         }
 
         public override void Forward(Executor executor)
@@ -541,13 +516,6 @@ namespace AleaTK.ML.Operator
 
             if (IsTraining)
             {
-                executor.AssignTensor(HX, hy);
-                executor.AssignTensor(CX, cy);
-                //executor.AssignTensor(HX, Fill(hx.Shape, ScalarOps.Conv<T>(0.0)));
-                //executor.AssignTensor(CX, Fill(cx.Shape, ScalarOps.Conv<T>(0.0)));
-
-                //executor.Context.Eval(cx.Reshape(-1)).Print();
-
                 var reserveSpace = executor.GetTensor(ReserveSpace);
                 dnn.RNNForwardTraining(
                     rnnDesc, seqLength, xDesc, x.Buffer.Ptr, hxDesc, hx.Buffer.Ptr,
@@ -587,11 +555,6 @@ namespace AleaTK.ML.Operator
             {
                 throw new InvalidOperationException();
             }
-
-            //executor.AssignGradientDirectly(HY, executor.GetGradient(HX));
-            //executor.AssignGradientDirectly(CY, executor.GetGradient(CX));
-
-            //executor.Context.Eval(executor.GetTensor(HY).Reshape(-1)).Print();
 
             dnn.RNNBackwardData(
                 executor.RnnDescDict[RnnDesc],

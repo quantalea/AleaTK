@@ -240,9 +240,19 @@ namespace AleaTK
             return Reference<T>(array);
         }
 
+        public static Tensor<T> AsTensor<T>(this T[,] array, Shape shape)
+        {
+            return Reference<T>(array, shape);
+        }
+
         public static Tensor<T> AsTensor<T>(this T[,,] array)
         {
             return Reference<T>(array);
+        }
+
+        public static Tensor<T> AsTensor<T>(this T[,,] array, Shape shape)
+        {
+            return Reference<T>(array, shape);
         }
         #endregion
 
