@@ -36,14 +36,18 @@ namespace AleaTK.ML.Operator
             C = AuxVariable<T>();
             Ct = AuxVariable<T>();
             Temp1 = AuxVariable<T>();
-            CX = cx ?? Variable<T>();
-            HX = hx ?? Variable<T>();
+            CX = cx ?? Variable<T>(PartialShape.Create(-1, HiddenSize));
+            HX = hx ?? Variable<T>(PartialShape.Create(-1, HiddenSize));
+            CY = Variable<T>(PartialShape.Create(-1, HiddenSize));
+            HY = Variable<T>(PartialShape.Create(-1, HiddenSize));
 
             AddInput(X);
             AddOutput(Y);
             AddInput(W);
             AddInput(CX);
             AddInput(HX);
+            AddOutput(CY);
+            AddOutput(HY);
             AddAuxVar(Hin);
             AddAuxVar(Hout);
             AddAuxVar(IFOG);
@@ -87,6 +91,10 @@ namespace AleaTK.ML.Operator
 
         public Variable<T> HX { get; }
 
+        public Variable<T> CY { get; }
+
+        public Variable<T> HY { get; }
+
         public Variable<T> Hin { get; }
 
         public Variable<T> Hout { get; }
@@ -103,6 +111,7 @@ namespace AleaTK.ML.Operator
 
         public override void Forward(Executor executor)
         {
+            var ctx = executor.Context;
             var w = executor.GetTensor(W);
             var xphpb = w.Shape[0];
             var x = executor.GetTensor(X);
@@ -112,6 +121,8 @@ namespace AleaTK.ML.Operator
 
             var c0 = executor.GetTensor(CX);
             var h0 = executor.GetTensor(HX);
+            var cn = executor.GetTensor(CY, Shape.Create(b, d));
+            var hn = executor.GetTensor(HY, Shape.Create(b, d));
             Util.EnsureTrue(c0.Shape.SequenceEqual(Shape.Create(b, d)));
             Util.EnsureTrue(h0.Shape.SequenceEqual(Shape.Create(b, d)));
 
@@ -122,12 +133,14 @@ namespace AleaTK.ML.Operator
             var c = executor.GetTensor(C, Shape.Create(n, b, d));
             var ct = executor.GetTensor(Ct, Shape.Create(n, b, d));
 
-            var ctx = executor.Context;
+            //var prevh = executor.GetTensor(Temp1, Shape.Create(1, b, d));
+            //var prevc = executor.GetTensor(Temp1, Shape.Create(1, b, d));
+            var prevh = hn.Reshape(1, b, d);
+            var prevc = cn.Reshape(1, b, d);
 
             for (var t = 0; t < n; ++t)
             {
                 // stack input
-                var prevh = executor.GetTensor(Temp1, Shape.Create(1, b, d));
                 ctx.Assign(prevh, t > 0 ? hout.Slice(t - 1) : h0);
                 ctx.Assign(hin.Slice(t, -1, 0), Fill(Shape.Create(1, b, 1), ScalarOps.Conv<T>(1.0))); // bias
                 ctx.Assign(hin.Slice(t, -1, Range(1, InputSize + 1)), x.Slice(t));
@@ -138,14 +151,13 @@ namespace AleaTK.ML.Operator
 
                 // non-linearities
                 // first 3 matrices are ifo
-                ctx.Assign(ifogf.Slice(t, -1, Range(0, 3*d)), 
-                    1.0.AsScalar<T>() / (1.0.AsScalar<T>() + Exp(-ifog.Slice(t, -1, Range(0, 3*d)))));
+                ctx.Assign(ifogf.Slice(t, -1, Range(0, 3 * d)),
+                    1.0.AsScalar<T>() / (1.0.AsScalar<T>() + Exp(-ifog.Slice(t, -1, Range(0, 3 * d)))));
 
                 // last one is for g(a)
-                ctx.Assign(ifogf.Slice(t, -1, Range(3*d, -1)), Tanh(ifog.Slice(t, -1, Range(3*d, -1))));
+                ctx.Assign(ifogf.Slice(t, -1, Range(3 * d, -1)), Tanh(ifog.Slice(t, -1, Range(3 * d, -1))));
 
                 // update c
-                var prevc = executor.GetTensor(Temp1, Shape.Create(1, b, d));
                 ctx.Assign(prevc, t > 0 ? c.Slice(t - 1) : c0);
                 // c_t = i_t * a_t + f_t * c_t-1
                 ctx.Assign(c.Slice(t),
@@ -156,6 +168,8 @@ namespace AleaTK.ML.Operator
                 ctx.Assign(hout.Slice(t), ifogf.Slice(t, -1, Range(2 * d, 3 * d)) * ct.Slice(t));
             }
 
+            ctx.Assign(prevc, c.Slice(n - 1));
+            ctx.Assign(prevh, hout.Slice(n - 1));
             executor.AssignTensor(Y, hout);
         }
 
@@ -260,6 +274,627 @@ namespace AleaTK.ML.Operator
         }
     }
 
+    public class LSTM1b<T> : Differentiable
+    {
+        public LSTM1b(Variable<T> x, int hiddenSize, Variable<T> cx = null, Variable<T> hx = null, double forgetBiasInit = 3.0)
+        {
+            // X shape (seqLength, batch, inputSize)
+            Util.EnsureEqual(3, x.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
+            X = x;
+            SeqLength = (int)X.Shape[0];
+            InputSize = (int)X.Shape[2];
+            HiddenSize = hiddenSize;
+            ForgetBiasInit = forgetBiasInit;
+
+            // Y Shape (seqLength, batch, hiddenSize)
+            Y = Variable<T>(PartialShape.Create(SeqLength, -1, HiddenSize));
+
+            // W (inputSize + hiddenSize + 1, 4 * hiddenSize)
+            W =
+                Parameter(RandomNormal<T>(Shape.Create(InputSize + HiddenSize + 1, 4 * HiddenSize)) /
+                          (Math.Sqrt(InputSize + hiddenSize)).AsScalar<T>());
+            // the following W initialization happens in Initialize();
+
+            Hin = AuxVariable<T>();
+            Hout = AuxVariable<T>();
+            IFOG = AuxVariable<T>();
+            IFOGf = AuxVariable<T>();
+            C = AuxVariable<T>();
+            Ct = AuxVariable<T>();
+            Temp1 = AuxVariable<T>();
+            CX = cx ?? Variable<T>(PartialShape.Create(-1, HiddenSize));
+            HX = hx ?? Variable<T>(PartialShape.Create(-1, HiddenSize));
+            CY = Variable<T>(PartialShape.Create(-1, HiddenSize));
+            HY = Variable<T>(PartialShape.Create(-1, HiddenSize));
+
+            AddInput(X);
+            AddOutput(Y);
+            AddInput(W);
+            AddInput(CX);
+            AddInput(HX);
+            AddOutput(CY);
+            AddOutput(HY);
+            AddAuxVar(Hin);
+            AddAuxVar(Hout);
+            AddAuxVar(IFOG);
+            AddAuxVar(IFOGf);
+            AddAuxVar(C);
+            AddAuxVar(Ct);
+            AddAuxVar(Temp1);
+        }
+
+        public override void Initialize(Executor executor)
+        {
+            base.Initialize(executor);
+
+            // set bias to zero
+            var ctx = executor.Context;
+            var w = executor.GetTensor(W);
+            ctx.Assign(w.Slice(0), 0.0.AsScalar<T>());
+
+            if (ForgetBiasInit != 0.0)
+            {
+                ctx.Assign(w.Slice(0, Range(HiddenSize, HiddenSize * 2)),
+                    Fill(Shape.Create(1, HiddenSize), ScalarOps.Conv<T>(ForgetBiasInit)));
+            }
+        }
+
+        public override void Forward(Executor executor)
+        {
+            var ctx = executor.Context;
+            Util.EnsureTrue(ctx.Type == ContextType.Gpu);
+            var stream = ctx.ToGpuContext().Stream;
+
+            var w = executor.GetTensor(W);
+            var xphpb = w.Shape[0];
+            var x = executor.GetTensor(X);
+            var b = x.Shape[1];
+            var n = x.Shape[0];
+            var d = HiddenSize;
+
+            var c0 = executor.GetTensor(CX);
+            var h0 = executor.GetTensor(HX);
+            var cn = executor.GetTensor(CY, Shape.Create(b, d));
+            var hn = executor.GetTensor(HY, Shape.Create(b, d));
+            Util.EnsureTrue(c0.Shape.SequenceEqual(Shape.Create(b, d)));
+            Util.EnsureTrue(h0.Shape.SequenceEqual(Shape.Create(b, d)));
+
+            var hin = executor.GetTensor(Hin, Shape.Create(n, b, xphpb));
+            var hout = executor.GetTensor(Hout, Shape.Create(n, b, d));
+            var ifog = executor.GetTensor(IFOG, Shape.Create(n, b, d * 4));
+            var ifogf = executor.GetTensor(IFOGf, Shape.Create(n, b, d * 4));
+            var c = executor.GetTensor(C, Shape.Create(n, b, d));
+            var ct = executor.GetTensor(Ct, Shape.Create(n, b, d));
+
+            var prevh = hn.Reshape(1, b, d);
+            var prevc = cn.Reshape(1, b, d);
+
+            for (var t = 0; t < n; ++t)
+            {
+                // stack input
+                ctx.Assign(prevh, t > 0 ? hout.Slice(t - 1) : h0);
+                ctx.Assign(hin.Slice(t, -1, 0), Fill(Shape.Create(1, b, 1), ScalarOps.Conv<T>(1.0))); // bias
+                ctx.Assign(hin.Slice(t, -1, Range(1, InputSize + 1)), x.Slice(t));
+                ctx.Assign(hin.Slice(t, -1, Range(InputSize + 1, -1)), prevh);
+
+                // dot
+                ctx.Assign(ifog.Slice(t), Dot(hin.Slice(t).Reshape(b, xphpb), w));
+
+                // non-linearities
+                // first 3 matrices are ifo
+                ctx.Assign(ifogf.Slice(t, -1, Range(0, 3 * d)),
+                    1.0.AsScalar<T>() / (1.0.AsScalar<T>() + Exp(-ifog.Slice(t, -1, Range(0, 3 * d)))));
+
+                // last one is for g(a)
+                ctx.Assign(ifogf.Slice(t, -1, Range(3 * d, -1)), Tanh(ifog.Slice(t, -1, Range(3 * d, -1))));
+
+                // update c
+                ctx.Assign(prevc, t > 0 ? c.Slice(t - 1) : c0);
+                // c_t = i_t * a_t + f_t * c_t-1
+                ctx.Assign(c.Slice(t),
+                    ifogf.Slice(t, -1, Range(0, d)) * ifogf.Slice(t, -1, Range(3 * d, -1)) +
+                    ifogf.Slice(t, -1, Range(d, 2 * d)) * prevc);
+                // h_t = o_t * tanh(c_t)
+                ctx.Assign(ct.Slice(t), Tanh(c.Slice(t)));
+                ctx.Assign(hout.Slice(t), ifogf.Slice(t, -1, Range(2 * d, 3 * d)) * ct.Slice(t));
+            }
+
+            ctx.Assign(prevc, c.Slice(n - 1));
+            ctx.Assign(prevh, hout.Slice(n - 1));
+            executor.AssignTensor(Y, hout);
+        }
+
+        public static Tensor<T> GetZeroGradient(Executor executor, Variable<T> var)
+        {
+            var data = executor.GetData(var);
+            Util.EnsureTrue(data.GradientAggregationCounter == 0);
+            var tensor = executor.GetTensor(var);
+            executor.AssignGradientDirectly(var, Fill(tensor.Shape, ScalarOps.Conv<T>(0.0)));
+            return executor.GetGradient(var);
+        }
+
+        public override void Backward(Executor executor)
+        {
+            var ctx = executor.Context;
+
+            var dy = executor.GetGradient(Y); // input
+            var w = executor.GetTensor(W);
+            var x = executor.GetTensor(X);
+            var c = executor.GetTensor(C);
+            var ct = executor.GetTensor(Ct);
+            var hin = executor.GetTensor(Hin);
+            var hout = executor.GetTensor(Hout);
+            var ifogf = executor.GetTensor(IFOGf);
+            var n = hout.Shape[0];
+            var b = hout.Shape[1];
+            var d = (int)hout.Shape[2];
+            var xphpb = w.Shape[0];
+
+            var c0 = executor.GetTensor(CX);
+            var h0 = executor.GetTensor(HX);
+            Util.EnsureTrue(c0.Shape.SequenceEqual(Shape.Create(b, d)));
+            Util.EnsureTrue(h0.Shape.SequenceEqual(Shape.Create(b, d)));
+
+            var dc = GetZeroGradient(executor, C);
+            var dx = GetZeroGradient(executor, X);
+            var dw = GetZeroGradient(executor, W);
+            var dIFOG = GetZeroGradient(executor, IFOG);
+            var dIFOGf = GetZeroGradient(executor, IFOGf);
+            var dhin = GetZeroGradient(executor, Hin);
+            var dhout = GetZeroGradient(executor, Hout);
+            var dh0 = GetZeroGradient(executor, HX);
+            var dc0 = GetZeroGradient(executor, CX);
+
+            ctx.Assign(dhout, dy);
+
+            // TODO: dcn and dhn
+            // now all are 0!
+
+            for (var t = n - 1; t >= 0; --t)
+            {
+                var tanhCt = ct.Slice(t);
+
+                // do_t = dh_t * tanh(c_t)
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(2 * d, 3 * d)), tanhCt * dhout.Slice(t));
+
+                // dc_t += dh_t * o_t * (1 - tanh**2(c_t))
+                ctx.Assign(dc.Slice(t),
+                    dc.Slice(t) +
+                    (1.0.AsScalar<T>() - tanhCt * tanhCt) * (ifogf.Slice(t, -1, Range(2 * d, 3 * d)) * dhout.Slice(t)));
+
+                // df_t = dc_t * c_t-1
+                if (t > 0)
+                {
+                    ctx.Assign(dIFOGf.Slice(t, -1, Range(d, 2 * d)), c.Slice(t - 1) * dc.Slice(t));
+                    ctx.Assign(dc.Slice(t - 1), dc.Slice(t - 1) + ifogf.Slice(t, -1, Range(d, 2 * d)) * dc.Slice(t));
+                }
+                else
+                {
+                    ctx.Assign(dIFOGf.Slice(t, -1, Range(d, 2 * d)), c0 * dc.Slice(t));
+                    ctx.Assign(dc0, (ifogf.Slice(t, -1, Range(d, 2 * d)) * dc.Slice(t)).Reshape(b, d));
+                }
+                // di_t = dc_t * a_t
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(0, d)), ifogf.Slice(t, -1, Range(3 * d, -1)) * dc.Slice(t));
+                // da_t = dc_t * i_t
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(3 * d, -1)), ifogf.Slice(t, -1, Range(0, d)) * dc.Slice(t));
+
+                // backprop activation functions
+                var tmp1 = ifogf.Slice(t, -1, Range(3 * d, -1));
+                ctx.Assign(dIFOG.Slice(t, -1, Range(3 * d, -1)), (1.0.AsScalar<T>() - tmp1 * tmp1) * dIFOGf.Slice(t, -1, Range(3 * d, -1)));
+                var tmp2 = ifogf.Slice(t, -1, Range(0, 3 * d));
+                ctx.Assign(dIFOG.Slice(t, -1, Range(0, 3 * d)),
+                    (tmp2 * (1.0.AsScalar<T>() - tmp2)) * dIFOGf.Slice(t, -1, Range(0, 3 * d)));
+
+                // backprop matrix multiply
+                var tmp3 = executor.GetTensor(Temp1, Shape.Create(b, xphpb));
+                ctx.Assign(tmp3, hin.Slice(t).Reshape(b, xphpb));
+                ctx.Assign(dw, dw + Dot(tmp3.T, dIFOG.Slice(t).Reshape(b, 4 * d)));
+                ctx.Assign(dhin.Slice(t), Dot(dIFOG.Slice(t).Reshape(b, 4 * d), w.T));
+
+                // backprop the identity transforms into hin
+                ctx.Assign(dx.Slice(t), dhin.Slice(t, -1, Range(1, InputSize + 1)));
+                if (t > 0)
+                {
+                    ctx.Assign(dhout.Slice(t - 1), dhout.Slice(t - 1) + dhin.Slice(t, -1, Range(InputSize + 1, -1)));
+                }
+                else
+                {
+                    ctx.Assign(dh0, (dh0.Reshape(1, b, d) + dhin.Slice(t, -1, Range(InputSize + 1, -1))).Reshape(b, d));
+                }
+            }
+        }
+
+        public double ForgetBiasInit { get; }
+
+        public int SeqLength { get; }
+
+        public int InputSize { get; }
+
+        public int HiddenSize { get; }
+
+        public Variable<T> X { get; }
+
+        public Variable<T> Y { get; }
+
+        public Variable<T> W { get; }
+
+        public Variable<T> CX { get; }
+
+        public Variable<T> HX { get; }
+
+        public Variable<T> CY { get; }
+
+        public Variable<T> HY { get; }
+
+        public Variable<T> Hin { get; }
+
+        public Variable<T> Hout { get; }
+
+        public Variable<T> IFOG { get; }
+
+        public Variable<T> IFOGf { get; }
+
+        public Variable<T> C { get; }
+
+        public Variable<T> Ct { get; }
+
+        public Variable<T> Temp1 { get; }
+    }
+
+    public class LSTM2<T> : Differentiable
+    {
+        public LSTM2(Variable<T> x, int hiddenSize, double forgetBiasInit = 3.0, Variable<T> cx = null, Variable<T> hx = null)
+        {
+            // X shape (seqLength, batch, inputSize)
+            Util.EnsureEqual(3, x.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
+            Util.EnsureTrue(X.Shape[0] > 0, "SeqLength must be determined.");
+            Util.EnsureTrue(X.Shape[2] > 0, "InputSize must be determined.");
+            X = x;
+            SeqLength = (int)X.Shape[0];
+            InputSize = (int)X.Shape[2];
+            HiddenSize = hiddenSize;
+            ForgetBiasInit = forgetBiasInit;
+
+            // Y Shape (seqLength, batch, hiddenSize)
+            Y = Variable<T>(PartialShape.Create(SeqLength, -1, HiddenSize));
+
+            // W (inputSize + hiddenSize + 1, 4 * hiddenSize)
+            // W (4 * inputSize + 4 * hiddenSize + 4, hiddenSize)
+            // our W layout is AIFO
+            W =
+                Parameter(RandomNormal<T>(Shape.Create(4 * InputSize + 4 * HiddenSize + 4, HiddenSize)) /
+                          (Math.Sqrt(InputSize + hiddenSize)).AsScalar<T>());
+            // the following W initialization happens in Initialize();
+
+            CX = cx ?? Variable<T>(PartialShape.Create(-1, HiddenSize));
+            HX = hx ?? Variable<T>(PartialShape.Create(-1, HiddenSize));
+            CY = Variable<T>(PartialShape.Create(-1, HiddenSize));
+            HY = Variable<T>(PartialShape.Create(-1, HiddenSize));
+
+            AIFO1 = AuxVariable<T>();
+            AIFO2 = AuxVariable<T>();
+            C1 = AuxVariable<T>();
+            C2 = AuxVariable<T>();
+
+            AddInput(X);
+            AddInput(W);
+            AddInput(CX);
+            AddInput(HX);
+            AddOutput(Y);
+            AddOutput(CY);
+            AddOutput(HY);
+            AddAuxVar(AIFO1);
+            AddAuxVar(AIFO2);
+            AddAuxVar(C1);
+            AddAuxVar(C2);
+
+            // --------------------------------
+
+            Hin = AuxVariable<T>();
+            Hout = AuxVariable<T>();
+            IFOG = AuxVariable<T>();
+            IFOGf = AuxVariable<T>();
+            C = AuxVariable<T>();
+            Ct = AuxVariable<T>();
+            Temp1 = AuxVariable<T>();
+
+            AddAuxVar(Hin);
+            AddAuxVar(Hout);
+            AddAuxVar(IFOG);
+            AddAuxVar(IFOGf);
+            AddAuxVar(C);
+            AddAuxVar(Ct);
+            AddAuxVar(Temp1);
+        }
+
+        public override void Initialize(Executor executor)
+        {
+            base.Initialize(executor);
+
+            var ctx = executor.Context;
+            var w = executor.GetTensor(W);
+
+            // first set them all to 0
+            // w layout: W -> U -> B, AIFO, so we locate the bias
+            ctx.Assign(w.Slice(Range(4*InputSize + 4*HiddenSize, -1)), 0.0.AsScalar<T>());
+
+            // set forget bias if possible, remember: AIFO
+            if (ForgetBiasInit != 0.0)
+            {
+                ctx.Assign(w.Slice(4*InputSize + 4*HiddenSize + 2), ForgetBiasInit.AsScalar<T>());
+            }
+        }
+
+        public override void Forward(Executor executor)
+        {
+            var ctx = executor.Context;
+            var one = 1.0.AsScalar<T>();
+
+            // W layout: AIFO
+            var oftU = 4 * InputSize;
+            var oftB = 4 * InputSize + 4 * HiddenSize;
+
+            var w = executor.GetTensor(W);
+            var x = executor.GetTensor(X);
+            var inputSize = InputSize;
+            var hiddenSize = HiddenSize;
+            var n = x.Shape[0];
+            var b = x.Shape[1];
+            var d = x.Shape[2];
+            var y = executor.GetTensor(Y, Shape.Create(n, b, d));
+
+            var cx = executor.GetTensor(CX);
+            var hx = executor.GetTensor(HX);
+            Util.EnsureTrue(cx.Shape.SequenceEqual(Shape.Create(b, d)));
+            Util.EnsureTrue(hx.Shape.SequenceEqual(Shape.Create(b, d)));
+
+            var cy = executor.GetTensor(CY, Shape.Create(b, d));
+            var hy = executor.GetTensor(HY, Shape.Create(b, d));
+            ctx.Assign(cy, cx);
+            ctx.Assign(hy, hx);
+
+            // w matrices (AIFO)
+            var oft = 0;
+            var wa = w.Slice(Range(oft, oft + inputSize)); oft += inputSize;
+            var wi = w.Slice(Range(oft, oft + inputSize)); oft += inputSize;
+            var wf = w.Slice(Range(oft, oft + inputSize)); oft += inputSize;
+            var wo = w.Slice(Range(oft, oft + inputSize));
+
+            // u matrices (AIFO)
+            oft = oftU;
+            var ua = w.Slice(Range(oft, oft + hiddenSize)); oft += hiddenSize;
+            var ui = w.Slice(Range(oft, oft + hiddenSize)); oft += hiddenSize;
+            var uf = w.Slice(Range(oft, oft + hiddenSize)); oft += hiddenSize;
+            var uo = w.Slice(Range(oft, oft + hiddenSize));
+
+            // b vectors (AIFO)
+            oft = oftB;
+            var ba = w.Slice(oft); oft++;
+            var bi = w.Slice(oft); oft++;
+            var bf = w.Slice(oft); oft++;
+            var bo = w.Slice(oft);
+
+            // aifo 1 and 2, for storing intermediate value of aifo
+            // layout is (4, n, b, d) for AIFO
+            var aifo1 = executor.GetTensor(AIFO1, Shape.Create(4, n, b, d));
+            var a1 = aifo1.Slice(0).Reshape(n, b, d);
+            var i1 = aifo1.Slice(1).Reshape(n, b, d);
+            var f1 = aifo1.Slice(2).Reshape(n, b, d);
+            var o1 = aifo1.Slice(3).Reshape(n, b, d);
+
+            var aifo2 = executor.GetTensor(AIFO2, Shape.Create(4, n, b, d));
+            var a2 = aifo2.Slice(0).Reshape(n, b, d);
+            var i2 = aifo2.Slice(1).Reshape(n, b, d);
+            var f2 = aifo2.Slice(2).Reshape(n, b, d);
+            var o2 = aifo2.Slice(3).Reshape(n, b, d);
+
+            // c1 and c2 are aux var
+            var c1 = executor.GetTensor(C1, Shape.Create(n, b, d));
+            var c2 = executor.GetTensor(C2, Shape.Create(n, b, d));
+
+            // now start iteration
+            for (var t = 0; t < n; ++t)
+            {
+                // slice xt (1, b, inputSize)
+                var xt = x.Slice(t);
+                var yt = y.Slice(t);
+
+                // slice aifo;
+                var at1 = a1.Slice(t);
+                var it1 = i1.Slice(t);
+                var ft1 = f1.Slice(t);
+                var ot1 = o1.Slice(t);
+
+                var at2 = a2.Slice(t);
+                var it2 = i2.Slice(t);
+                var ft2 = f2.Slice(t);
+                var ot2 = o2.Slice(t);
+
+                var ct1 = c1.Slice(t);
+                var ct2 = c2.Slice(t);
+
+                // dot W
+                ctx.Assign(at1, Dot(xt.Reshape(b, inputSize), wa));
+                ctx.Assign(it1, Dot(xt.Reshape(b, inputSize), wi));
+                ctx.Assign(ft1, Dot(xt.Reshape(b, inputSize), wf));
+                ctx.Assign(ot1, Dot(xt.Reshape(b, inputSize), wo));
+
+                // dot U
+                ctx.Assign(at2, Dot(hy, ua));
+                ctx.Assign(it2, Dot(hy, ui));
+                ctx.Assign(ft2, Dot(hy, uf));
+                ctx.Assign(ot2, Dot(hy, uo));
+
+                // add together, store in aifo1
+                ctx.Assign(at1, at1 + at2 + ba);
+                ctx.Assign(it1, it1 + it2 + bi);
+                ctx.Assign(ft1, ft1 + ft2 + bf);
+                ctx.Assign(ot1, ot1 + ot2 + bo);
+
+                // apply non-linear
+                ctx.Assign(at2, Tanh(at1));
+                ctx.Assign(it2, one / (one + Exp(-it1)));
+                ctx.Assign(ft2, one / (one + Exp(-ft1)));
+                ctx.Assign(ot2, one / (one + Exp(-ot1)));
+
+                // update c
+                ctx.Assign(ct1, it2*at2 + ft2*cy);
+                ctx.Assign(ct2, Tanh(ct1));
+                ctx.Assign(yt, ot2*ct2);
+
+                // update hy and cy
+                ctx.Assign(cy, ct1);
+                ctx.Assign(hy, yt);
+            }
+        }
+
+        public static Tensor<T> GetZeroGradient(Executor executor, Variable<T> var)
+        {
+            var data = executor.GetData(var);
+            Util.EnsureTrue(data.GradientAggregationCounter == 0);
+            var tensor = executor.GetTensor(var);
+            executor.AssignGradientDirectly(var, Fill(tensor.Shape, ScalarOps.Conv<T>(0.0)));
+            return executor.GetGradient(var);
+        }
+
+        public override void Backward(Executor executor)
+        {
+            var ctx = executor.Context;
+
+            var dy = executor.GetGradient(Y); // input
+            var w = executor.GetTensor(W);
+            var x = executor.GetTensor(X);
+            var c = executor.GetTensor(C);
+            var ct = executor.GetTensor(Ct);
+            var hin = executor.GetTensor(Hin);
+            var hout = executor.GetTensor(Hout);
+            var ifogf = executor.GetTensor(IFOGf);
+            var n = hout.Shape[0];
+            var b = hout.Shape[1];
+            var d = (int)hout.Shape[2];
+            var xphpb = w.Shape[0];
+
+            var c0 = executor.GetTensor(CX);
+            var h0 = executor.GetTensor(HX);
+            Util.EnsureTrue(c0.Shape.SequenceEqual(Shape.Create(b, d)));
+            Util.EnsureTrue(h0.Shape.SequenceEqual(Shape.Create(b, d)));
+
+            var dc = GetZeroGradient(executor, C);
+            var dx = GetZeroGradient(executor, X);
+            var dw = GetZeroGradient(executor, W);
+            var dIFOG = GetZeroGradient(executor, IFOG);
+            var dIFOGf = GetZeroGradient(executor, IFOGf);
+            var dhin = GetZeroGradient(executor, Hin);
+            var dhout = GetZeroGradient(executor, Hout);
+            var dh0 = GetZeroGradient(executor, HX);
+            var dc0 = GetZeroGradient(executor, CX);
+
+            ctx.Assign(dhout, dy);
+
+            // TODO: dcn and dhn
+            // now all are 0!
+
+            for (var t = n - 1; t >= 0; --t)
+            {
+                var tanhCt = ct.Slice(t);
+
+                // do_t = dh_t * tanh(c_t)
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(2 * d, 3 * d)), tanhCt * dhout.Slice(t));
+
+                // dc_t += dh_t * o_t * (1 - tanh**2(c_t))
+                ctx.Assign(dc.Slice(t),
+                    dc.Slice(t) +
+                    (1.0.AsScalar<T>() - tanhCt * tanhCt) * (ifogf.Slice(t, -1, Range(2 * d, 3 * d)) * dhout.Slice(t)));
+
+                // df_t = dc_t * c_t-1
+                if (t > 0)
+                {
+                    ctx.Assign(dIFOGf.Slice(t, -1, Range(d, 2 * d)), c.Slice(t - 1) * dc.Slice(t));
+                    ctx.Assign(dc.Slice(t - 1), dc.Slice(t - 1) + ifogf.Slice(t, -1, Range(d, 2 * d)) * dc.Slice(t));
+                }
+                else
+                {
+                    ctx.Assign(dIFOGf.Slice(t, -1, Range(d, 2 * d)), c0 * dc.Slice(t));
+                    ctx.Assign(dc0, (ifogf.Slice(t, -1, Range(d, 2 * d)) * dc.Slice(t)).Reshape(b, d));
+                }
+                // di_t = dc_t * a_t
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(0, d)), ifogf.Slice(t, -1, Range(3 * d, -1)) * dc.Slice(t));
+                // da_t = dc_t * i_t
+                ctx.Assign(dIFOGf.Slice(t, -1, Range(3 * d, -1)), ifogf.Slice(t, -1, Range(0, d)) * dc.Slice(t));
+
+                // backprop activation functions
+                var tmp1 = ifogf.Slice(t, -1, Range(3 * d, -1));
+                ctx.Assign(dIFOG.Slice(t, -1, Range(3 * d, -1)), (1.0.AsScalar<T>() - tmp1 * tmp1) * dIFOGf.Slice(t, -1, Range(3 * d, -1)));
+                var tmp2 = ifogf.Slice(t, -1, Range(0, 3 * d));
+                ctx.Assign(dIFOG.Slice(t, -1, Range(0, 3 * d)),
+                    (tmp2 * (1.0.AsScalar<T>() - tmp2)) * dIFOGf.Slice(t, -1, Range(0, 3 * d)));
+
+                // backprop matrix multiply
+                var tmp3 = executor.GetTensor(Temp1, Shape.Create(b, xphpb));
+                ctx.Assign(tmp3, hin.Slice(t).Reshape(b, xphpb));
+                ctx.Assign(dw, dw + Dot(tmp3.T, dIFOG.Slice(t).Reshape(b, 4 * d)));
+                ctx.Assign(dhin.Slice(t), Dot(dIFOG.Slice(t).Reshape(b, 4 * d), w.T));
+
+                // backprop the identity transforms into hin
+                ctx.Assign(dx.Slice(t), dhin.Slice(t, -1, Range(1, InputSize + 1)));
+                if (t > 0)
+                {
+                    ctx.Assign(dhout.Slice(t - 1), dhout.Slice(t - 1) + dhin.Slice(t, -1, Range(InputSize + 1, -1)));
+                }
+                else
+                {
+                    ctx.Assign(dh0, (dh0.Reshape(1, b, d) + dhin.Slice(t, -1, Range(InputSize + 1, -1))).Reshape(b, d));
+                }
+            }
+        }
+
+        public double ForgetBiasInit { get; }
+
+        public int SeqLength { get; }
+
+        public int InputSize { get; }
+
+        public int HiddenSize { get; }
+
+        public Variable<T> X { get; }
+
+        public Variable<T> Y { get; }
+
+        public Variable<T> W { get; }
+
+        public Variable<T> CX { get; }
+
+        public Variable<T> HX { get; }
+
+        public Variable<T> CY { get; }
+
+        public Variable<T> HY { get; }
+
+        public Variable<T> AIFO1 { get; }
+
+        public Variable<T> AIFO2 { get; }
+
+        public Variable<T> C1 { get; }
+
+        public Variable<T> C2 { get; }
+
+        // -------------------------
+
+        public Variable<T> Hin { get; }
+
+        public Variable<T> Hout { get; }
+
+        public Variable<T> IFOG { get; }
+
+        public Variable<T> IFOGf { get; }
+
+        public Variable<T> C { get; }
+
+        public Variable<T> Ct { get; }
+
+        public Variable<T> Temp1 { get; }
+    }
+
     public class RNN<T> : Differentiable
     {
         public RNN(Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, double bias = 0.0, ulong dropoutSeed = 1337UL)
@@ -269,8 +904,9 @@ namespace AleaTK.ML.Operator
             NumLayers = numLayers;
             HiddenSize = hiddenSize;
             Bias = bias;
-            Dropout = dropout;
+            Dropout = isTraining ? dropout : 0.0;
             DropoutSeed = dropoutSeed;
+            Util.EnsureTrue(bias == 0.0, "bias need TODO");
 
             // X shape (seqLength, batch, inputSize)
             Util.EnsureEqual(3, X.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
@@ -385,6 +1021,7 @@ namespace AleaTK.ML.Operator
             dnn.DropoutGetStatesSize(out dropoutStatesSize);
             var dropoutStates = executor.GetTensor(DropoutStates, Shape.Create(dropoutStatesSize.ToInt64()));
             dropoutDesc.Set(dnn, (float)Dropout, dropoutStates.Buffer.Ptr, dropoutStatesSize, DropoutSeed);
+            //Console.WriteLine($"DROPOUT: {Dropout}");
 
             // rnn descriptor
             var rnnDesc = executor.RnnDescDict[RnnDesc];

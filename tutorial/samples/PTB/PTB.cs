@@ -8,6 +8,7 @@ using System.Net;
 using System.Runtime.Remoting.Messaging;
 using System.Text;
 using System.Threading.Tasks;
+using Alea.LBFGS;
 using AleaTK;
 using AleaTK.ML;
 using AleaTK.ML.Operator;
@@ -237,9 +238,286 @@ namespace Tutorial.Samples
             }
         }
 
-        public class Model
+        public class Model1
         {
-            public Model(Context ctx, Config config, bool isTraining = true)
+            public Model1(Context ctx, Config cfg, bool isTraining = true)
+            {
+                Config = cfg;
+                IsTraining = isTraining;
+
+                Inputs = Variable<int>(PartialShape.Create(cfg.NumSteps, cfg.BatchSize));
+                Targets = Variable<int>(PartialShape.Create(cfg.NumSteps, cfg.BatchSize));
+
+                // embedding, possible dropout
+                Embedding = new Embedding<float>(Inputs, cfg.VocabSize, cfg.HiddenSize, initScale: cfg.InitScale);
+                EmbeddedOutput = Embedding.Output;
+                if (isTraining && cfg.KeepProb < 1.0)
+                {
+                    var dropout = new Dropout<float>(EmbeddedOutput, dropoutProb: 1.0 - cfg.KeepProb);
+                    EmbeddedOutput = dropout.Output;
+                }
+
+                // rnn layer, possible dropout for each lstm layer output
+                RNN = new LSTM<float>[cfg.NumLayers];
+                for (var i = 0; i < cfg.NumLayers; ++i)
+                {
+                    var lstm = new LSTM<float>(i == 0 ? EmbeddedOutput : RNNOutput, cfg.HiddenSize, forgetBiasInit: 0.0);
+                    RNN[i] = lstm;
+                    RNNOutput = lstm.Y;
+                    if (isTraining && cfg.KeepProb < 1.0)
+                    {
+                        var dropout = new Dropout<float>(RNNOutput, dropoutProb: 1.0 - cfg.KeepProb);
+                        RNNOutput = dropout.Output;
+                    }
+                }
+
+                FC =
+                    new FullyConnected<float>(RNNOutput.Reshape(RNNOutput.Shape[0]*RNNOutput.Shape[1],
+                        RNNOutput.Shape[2]), cfg.VocabSize);
+
+                Loss = new SoftmaxCrossEntropySparse<float>(FC.Output,
+                    Targets.Reshape(Targets.Shape[0] * Targets.Shape[1]));
+
+                Optimizer = new GradientDescentOptimizer(ctx, Loss.Loss, cfg.LearningRate,
+                    new GlobalNormGradientClipper(cfg.MaxGradNorm));
+
+                // warmup (for JIT, and better timing measure)
+                Optimizer.Initalize();
+                ResetStates();
+                Optimizer.AssignTensor(Inputs, Fill(Shape.Create(Inputs.Shape.AsArray), 0));
+                Optimizer.AssignTensor(Targets, Fill(Shape.Create(Targets.Shape.AsArray), 0));
+                Optimizer.Forward();
+                if (isTraining)
+                {
+                    // TODO
+                    Optimizer.Backward();
+                }
+
+                // now reset states
+                Optimizer.Initalize();
+                ResetStates();
+            }
+
+            public void CopyWeightsFrom(Model1 o)
+            {
+                Optimizer.AssignTensor(Embedding.Weights, o.Optimizer.GetTensor(o.Embedding.Weights));
+                for (var i = 0; i < Config.NumLayers; ++i)
+                {
+                    Optimizer.AssignTensor(RNN[i].W, o.Optimizer.GetTensor(o.RNN[i].W));
+                }
+                Optimizer.AssignTensor(FC.Weights, o.Optimizer.GetTensor(o.FC.Weights));
+                Optimizer.AssignTensor(FC.Bias, o.Optimizer.GetTensor(o.FC.Bias));
+            }
+
+            public void ResetStates()
+            {
+                for (var i = 0; i < Config.NumLayers; ++i)
+                {
+                    var lstm = RNN[i];
+                    var shape = Shape.Create(Config.BatchSize, lstm.HiddenSize);
+                    Optimizer.AssignTensor(lstm.CX, Fill(shape, 0.0f));
+                    Optimizer.AssignTensor(lstm.HX, Fill(shape, 0.0f));
+                }
+            }
+
+            public void CopyStates()
+            {
+                for (var i = 0; i < Config.NumLayers; ++i)
+                {
+                    var lstm = RNN[i];
+                    Optimizer.AssignTensor(lstm.CX, Optimizer.GetTensor(lstm.CY));
+                    Optimizer.AssignTensor(lstm.HX, Optimizer.GetTensor(lstm.HY));
+                }
+            }
+
+            public double RunEpoch(int[] data, double learningRate = 1.0, bool verbose = false)
+            {
+                var cfg = Config;
+                var isTraining = IsTraining;
+                var epochSize = (data.Length / cfg.BatchSize - 1) / cfg.NumSteps;
+                var time = Stopwatch.StartNew();
+                var costs = 0.0;
+                var iters = 0;
+                var step = 0;
+                var firstBatch = true;
+
+                foreach (var batch in Data.Iterator(data, cfg.NumSteps, cfg.BatchSize))
+                {
+                    Optimizer.AssignTensor(Inputs, batch.Inputs.AsTensor());
+                    Optimizer.AssignTensor(Targets, batch.Targets.AsTensor());
+
+                    if (firstBatch)
+                    {
+                        ResetStates();
+                        firstBatch = false;
+                    }
+                    else
+                    {
+                        CopyStates();
+                    }
+
+                    Optimizer.Forward();
+
+                    if (isTraining)
+                    {
+                        Optimizer.Backward();
+                        Optimizer.Optimize(learningRate);
+                    }
+
+                    var loss = Optimizer.GetTensor(Loss.Loss).ToScalar();
+                    var cost = loss / cfg.BatchSize;
+                    costs += cost;
+                    iters += cfg.NumSteps;
+
+                    if (verbose && (step % (epochSize / 10) == 10))
+                    //if (true)
+                    {
+                        var perplexity = Math.Exp(costs / iters);
+                        var wps = (iters * cfg.BatchSize) / (time.Elapsed.TotalMilliseconds / 1000.0);
+
+                        Console.WriteLine($"{step:D4}: {step * 1.0 / epochSize:F3} perplexity: {perplexity:F3} speed:{wps:F0} wps cost: {cost:F3}");
+                    }
+
+                    //if (step > 5) break;
+
+                    step++;
+                }
+                return Math.Exp(costs / iters);
+            }
+
+            public Config Config { get; }
+
+            public bool IsTraining { get; }
+
+            public Variable<int> Inputs { get; }
+
+            public Variable<int> Targets { get; }
+
+            public Embedding<float> Embedding { get; }
+
+            public Variable<float> EmbeddedOutput { get; }
+
+            public LSTM<float>[] RNN { get; } 
+
+            public Variable<float> RNNOutput { get; }
+
+            public FullyConnected<float> FC { get; }
+
+            public SoftmaxCrossEntropySparse<float> Loss { get; }
+
+            public GradientDescentOptimizer Optimizer { get; }
+        }
+
+        [Test, Ignore("To long to run, please explicitly run it.")]
+        public static void Run1()
+        {
+            Run1(false);
+        }
+
+        public static void Run1(bool isConsole)
+        {
+            var ptb = new Data(DataPath);
+            var ctx = Context.GpuContext(0);
+
+            var cfg = Config.Medium(batchSize: 20);
+            var cfgValid = Config.Medium(batchSize: 20);
+            var cfgTest = Config.Medium(batchSize: 1, numSteps: 1);
+            var cfgInteractive = Config.Medium(batchSize: 1, numSteps: 10);
+
+            Assert.AreEqual(ptb.WordToIdDict.Count, cfg.VocabSize);
+            Assert.AreEqual(ptb.WordToIdDict.Count, cfgValid.VocabSize);
+            Assert.AreEqual(ptb.WordToIdDict.Count, cfgTest.VocabSize);
+            Assert.AreEqual(ptb.WordToIdDict.Count, cfgInteractive.VocabSize);
+
+            var model = new Model1(ctx, cfg, isTraining: true);
+            var modelValid = new Model1(ctx, cfgValid, isTraining: false);
+            //var modelTest = new Model1(ctx, cfgTest, isTraining: false);
+            //var modelInteractive = new Model1(ctx, cfgInteractive, isTraining: false);
+
+            for (var i = 0; i < cfg.MaxMaxEpoch; ++i)
+            {
+                var lrDecay = Math.Pow(cfg.LrDecay, Math.Max(i - cfg.MaxEpoch, 0.0));
+                var learningRate = cfg.LearningRate * lrDecay;
+
+                Console.WriteLine($"Epoch: {i + 1} Learning rate: {learningRate:F3}");
+                var trainPerplexity = model.RunEpoch(ptb.TrainData, learningRate: learningRate, verbose: true);
+                Console.WriteLine($"Epoch: {i + 1} Train Perplexity: {trainPerplexity:F3}");
+
+                modelValid.CopyWeightsFrom(model);
+                var validPerplexity = modelValid.RunEpoch(ptb.ValidData);
+                Console.WriteLine($"Epoch: {i + 1} Valid Perplexity: {validPerplexity:F3}");
+            }
+
+
+            //modelTest.CopyWeightsFrom(model);
+            //Console.WriteLine("Testing with test data, this is slow, since batch size is set to small...");
+            //var testPerplexity = modelTest.RunEpoch(ptb.TestData, verbose: true);
+            //Console.WriteLine($"Test Perplexity: {testPerplexity:F3}");
+
+            if (isConsole)
+            {
+                //var inputs = new int[cfgInteractive.NumSteps, 1];
+                //modelInteractive.CopyWeightsFrom(model);
+                //// since the entropy and softmax are merged , so we have to allocate the target (label) tensor
+                //// this could be improved , by adding some null checking?
+                //modelInteractive.Optimizer.AssignTensor(modelInteractive.Targets, inputs.AsTensor());
+
+                //while (true)
+                //{
+                //    Console.WriteLine();
+                //    Console.WriteLine($"Enter some words (less than {cfgInteractive.NumSteps} words)");
+                //    var readLine = Console.ReadLine();
+                //    if (readLine == null) break;
+                //    var line = readLine.Trim(' ', '\t', '\r', '\n');
+                //    var words = line.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                //    if (words.Length <= 0 || words.Length > cfgInteractive.NumSteps) continue;
+
+                //    for (var i = 0; i < cfgInteractive.NumSteps; ++i)
+                //    {
+                //        if (i < words.Length)
+                //        {
+                //            inputs[i, 0] = ptb.WordToId(words[i]);
+                //        }
+                //        else
+                //        {
+                //            inputs[i, 0] = ptb.WordToId("<unk>");
+                //        }
+                //    }
+
+                //    Console.WriteLine("Your inputs are:");
+                //    for (var i = 0; i < cfgInteractive.NumSteps; ++i)
+                //    {
+                //        Console.Write($"{ptb.IdToWord(inputs[i, 0])} ");
+                //    }
+                //    Console.WriteLine();
+
+                //    modelInteractive.ResetStates();
+                //    modelInteractive.Optimizer.AssignTensor(modelInteractive.Inputs, inputs.AsTensor());
+                //    modelInteractive.Optimizer.Forward();
+
+                //    var logPred = modelInteractive.Optimizer.GetTensor(modelInteractive.Loss.LogPred).ToArray2D();
+                //    var pred = new List<IndexAndProb>();
+                //    var totalProb = 0.0;
+                //    for (var i = 0; i < cfgInteractive.VocabSize; ++i)
+                //    {
+                //        var p = new IndexAndProb { Index = i, Prob = Math.Exp(logPred[words.Length - 1, i]) };
+                //        pred.Add(p);
+                //        totalProb += p.Prob;
+                //    }
+                //    Console.WriteLine($"Total probability: {totalProb:F4}");
+                //    pred.Sort();
+                //    Console.WriteLine("Candidates are:");
+                //    pred.Take(10).Iter((x, o) =>
+                //    {
+                //        Console.WriteLine($" {x.Prob:P2} --> {ptb.IdToWord(x.Index)}");
+                //    });
+                //}
+            }
+        }
+
+        public class Model2
+        {
+            public Model2(Context ctx, Config config, bool isTraining = true)
             {
                 Config = config;
                 IsTraining = isTraining;
@@ -247,10 +525,19 @@ namespace Tutorial.Samples
                 Inputs = Variable<int>(PartialShape.Create(Config.NumSteps, Config.BatchSize));
                 Targets = Variable<int>(PartialShape.Create(Config.NumSteps, Config.BatchSize));
 
-                Embedding = new Embedding<float>(Inputs, Config.VocabSize, Config.HiddenSize, initScale: Config.InitScale);
-
-                RNN = new RNN<float>(Embedding.Output, Config.NumLayers, Config.HiddenSize, isTraining: IsTraining,
-                    dropout: (1.0 - Config.KeepProb), bias: 0.0);
+                if (isTraining && config.KeepProb < 1.0)
+                {
+                    Embedding = new Embedding<float>(Inputs, Config.VocabSize, Config.HiddenSize, initScale: Config.InitScale);
+                    var dropout = new Dropout<float>(Embedding.Output, dropoutProb: 1.0 - config.KeepProb);
+                    RNN = new RNN<float>(dropout.Output, Config.NumLayers, Config.HiddenSize, isTraining: IsTraining,
+                        dropout: 1.0 - Config.KeepProb, bias: 0.0);
+                }
+                else
+                {
+                    Embedding = new Embedding<float>(Inputs, Config.VocabSize, Config.HiddenSize, initScale: Config.InitScale);
+                    RNN = new RNN<float>(Embedding.Output, Config.NumLayers, Config.HiddenSize, isTraining: IsTraining,
+                        dropout: 0.0, bias: 0.0);
+                }
 
                 FC = new FullyConnected<float>(RNN.Y.Reshape(RNN.Y.Shape[0] * RNN.Y.Shape[1], RNN.Y.Shape[2]),
                     Config.VocabSize);
@@ -261,10 +548,24 @@ namespace Tutorial.Samples
                 Optimizer = new GradientDescentOptimizer(ctx, Loss.Loss, Config.LearningRate,
                     new GlobalNormGradientClipper(Config.MaxGradNorm));
 
+                // warmup (for JIT, and better timing measure)
                 Optimizer.Initalize();
+                ResetStates();
+                Optimizer.AssignTensor(Inputs, Fill(Shape.Create(Inputs.Shape.AsArray), 0));
+                Optimizer.AssignTensor(Targets, Fill(Shape.Create(Targets.Shape.AsArray), 0));
+                Optimizer.Forward();
+                if (isTraining)
+                {
+                    // TODO
+                    Optimizer.Backward();
+                }
+
+                // now reset states
+                Optimizer.Initalize();
+                ResetStates();
             }
 
-            public void CopyWeightsFrom(Model o)
+            public void CopyWeightsFrom(Model2 o)
             {
                 Optimizer.AssignTensor(Embedding.Weights, o.Optimizer.GetTensor(o.Embedding.Weights));
                 Optimizer.AssignTensor(RNN.W, o.Optimizer.GetTensor(o.RNN.W));
@@ -317,8 +618,8 @@ namespace Tutorial.Samples
                     costs += cost;
                     iters += Config.NumSteps;
 
-                    if (verbose && (step % (epochSize / 10) == 10))
-                    //if (true)
+                    //if (verbose && (step % (epochSize / 10) == 10))
+                    if (true)
                     {
                         var perplexity = Math.Exp(costs / iters);
                         var wps = (iters * Config.BatchSize) / (time.Elapsed.TotalMilliseconds / 1000.0);
@@ -326,7 +627,7 @@ namespace Tutorial.Samples
                         Console.WriteLine($"{step:D4}: {step * 1.0 / epochSize:F3} perplexity: {perplexity:F3} speed:{wps:F0} wps cost: {cost:F3}");
                     }
 
-                    //if (step > 100) break;
+                    if (step > 5) break;
 
                     step++;
                 }
@@ -371,30 +672,30 @@ namespace Tutorial.Samples
         }
 
         [Test, Ignore("To long to run, please explicitly run it.")]
-        public static void Run()
+        public static void Run2()
         {
-            Run(false);
+            Run2(false);
         }
 
-        public static void Run(bool isConsole)
+        public static void Run2(bool isConsole)
         {
             var ptb = new Data(DataPath);
             var ctx = Context.GpuContext(0);
 
             var cfg = Config.Medium();
-            var cfgValid = Config.Medium(keepProb: 0.0);
-            var cfgTest = Config.Medium(batchSize: 1, numSteps: 1, keepProb: 0.0);
-            var cfgInteractive = Config.Medium(batchSize: 1, numSteps: 10, keepProb: 0.0);
+            var cfgValid = Config.Medium();
+            var cfgTest = Config.Medium(batchSize: 1, numSteps: 1);
+            var cfgInteractive = Config.Medium(batchSize: 1, numSteps: 10);
 
             Assert.AreEqual(ptb.WordToIdDict.Count, cfg.VocabSize);
             Assert.AreEqual(ptb.WordToIdDict.Count, cfgValid.VocabSize);
             Assert.AreEqual(ptb.WordToIdDict.Count, cfgTest.VocabSize);
             Assert.AreEqual(ptb.WordToIdDict.Count, cfgInteractive.VocabSize);
 
-            var model = new Model(ctx, cfg, isTraining: true);
-            var modelValid = new Model(ctx, cfgValid, isTraining: false);
-            var modelTest = new Model(ctx, cfgTest, isTraining: false);
-            var modelInteractive = new Model(ctx, cfgInteractive, isTraining: false);
+            var model = new Model2(ctx, cfg, isTraining: true);
+            var modelValid = new Model2(ctx, cfgValid, isTraining: false);
+            var modelTest = new Model2(ctx, cfgTest, isTraining: false);
+            var modelInteractive = new Model2(ctx, cfgInteractive, isTraining: false);
 
             for (var i = 0; i < cfg.MaxMaxEpoch; ++i)
             {
@@ -405,80 +706,82 @@ namespace Tutorial.Samples
                 var trainPerplexity = model.RunEpoch(ptb.TrainData, learningRate: learningRate, verbose: true);
                 Console.WriteLine($"Epoch: {i + 1} Train Perplexity: {trainPerplexity:F3}");
 
-                modelValid.CopyWeightsFrom(model);
-                var validPerplexity = modelValid.RunEpoch(ptb.ValidData);
-                Console.WriteLine($"Epoch: {i + 1} Valid Perplexity: {validPerplexity:F3}");
+                //modelValid.CopyWeightsFrom(model);
+                //var validPerplexity = modelValid.RunEpoch(ptb.ValidData);
+                //Console.WriteLine($"Epoch: {i + 1} Valid Perplexity: {validPerplexity:F3}");
             }
 
-            modelTest.CopyWeightsFrom(model);
-            Console.WriteLine("Testing with test data, this is slow, since batch size is set to small...");
-            var testPerplexity = modelTest.RunEpoch(ptb.TestData, verbose: true);
-            Console.WriteLine($"Test Perplexity: {testPerplexity:F3}");
+            //modelTest.CopyWeightsFrom(model);
+            //Console.WriteLine("Testing with test data, this is slow, since batch size is set to small...");
+            //var testPerplexity = modelTest.RunEpoch(ptb.TestData, verbose: true);
+            //Console.WriteLine($"Test Perplexity: {testPerplexity:F3}");
 
             if (isConsole)
             {
-                var inputs = new int[cfgInteractive.NumSteps, 1];
-                modelInteractive.CopyWeightsFrom(model);
-                // since the entropy and softmax are merged , so we have to allocate the target (label) tensor
-                // this could be improved , by adding some null checking?
-                modelInteractive.Optimizer.AssignTensor(modelInteractive.Targets, inputs.AsTensor());
+                //var inputs = new int[cfgInteractive.NumSteps, 1];
+                //modelInteractive.CopyWeightsFrom(model);
+                //// since the entropy and softmax are merged , so we have to allocate the target (label) tensor
+                //// this could be improved , by adding some null checking?
+                //modelInteractive.Optimizer.AssignTensor(modelInteractive.Targets, inputs.AsTensor());
 
-                while (true)
-                {
-                    Console.WriteLine();
-                    Console.WriteLine($"Enter some words (less than {cfgInteractive.NumSteps} words)");
-                    var readLine = Console.ReadLine();
-                    if (readLine == null) break;
-                    var line = readLine.Trim(' ', '\t', '\r', '\n');
-                    var words = line.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    if (words.Length <= 0 || words.Length > cfgInteractive.NumSteps) continue;
+                //while (true)
+                //{
+                //    Console.WriteLine();
+                //    Console.WriteLine($"Enter some words (less than {cfgInteractive.NumSteps} words)");
+                //    var readLine = Console.ReadLine();
+                //    if (readLine == null) break;
+                //    var line = readLine.Trim(' ', '\t', '\r', '\n');
+                //    var words = line.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                //    if (words.Length <= 0 || words.Length > cfgInteractive.NumSteps) continue;
 
-                    for (var i = 0; i < cfgInteractive.NumSteps; ++i)
-                    {
-                        if (i < words.Length)
-                        {
-                            inputs[i, 0] = ptb.WordToId(words[i]);
-                        }
-                        else
-                        {
-                            inputs[i, 0] = ptb.WordToId("<unk>");
-                        }
-                    }
+                //    for (var i = 0; i < cfgInteractive.NumSteps; ++i)
+                //    {
+                //        if (i < words.Length)
+                //        {
+                //            inputs[i, 0] = ptb.WordToId(words[i]);
+                //        }
+                //        else
+                //        {
+                //            inputs[i, 0] = ptb.WordToId("<unk>");
+                //        }
+                //    }
 
-                    Console.WriteLine("Your inputs are:");
-                    for (var i = 0; i < cfgInteractive.NumSteps; ++i)
-                    {
-                        Console.Write($"{ptb.IdToWord(inputs[i, 0])} ");
-                    }
-                    Console.WriteLine();
+                //    Console.WriteLine("Your inputs are:");
+                //    for (var i = 0; i < cfgInteractive.NumSteps; ++i)
+                //    {
+                //        Console.Write($"{ptb.IdToWord(inputs[i, 0])} ");
+                //    }
+                //    Console.WriteLine();
                     
-                    modelInteractive.ResetStates();
-                    modelInteractive.Optimizer.AssignTensor(modelInteractive.Inputs, inputs.AsTensor());
-                    modelInteractive.Optimizer.Forward();
+                //    modelInteractive.ResetStates();
+                //    modelInteractive.Optimizer.AssignTensor(modelInteractive.Inputs, inputs.AsTensor());
+                //    modelInteractive.Optimizer.Forward();
 
-                    var logPred = modelInteractive.Optimizer.GetTensor(modelInteractive.Loss.LogPred).ToArray2D();
-                    var pred = new List<IndexAndProb>();
-                    var totalProb = 0.0;
-                    for (var i = 0; i < cfgInteractive.VocabSize; ++i)
-                    {
-                        var p = new IndexAndProb { Index = i, Prob = Math.Exp(logPred[words.Length - 1, i]) };
-                        pred.Add(p);
-                        totalProb += p.Prob;
-                    }
-                    Console.WriteLine($"Total probability: {totalProb:F4}");
-                    pred.Sort();
-                    Console.WriteLine("Candidates are:");
-                    pred.Take(10).Iter((x, o) =>
-                    {
-                        Console.WriteLine($" {x.Prob:P2} --> {ptb.IdToWord(x.Index)}");
-                    });
-                }
+                //    var logPred = modelInteractive.Optimizer.GetTensor(modelInteractive.Loss.LogPred).ToArray2D();
+                //    var pred = new List<IndexAndProb>();
+                //    var totalProb = 0.0;
+                //    for (var i = 0; i < cfgInteractive.VocabSize; ++i)
+                //    {
+                //        var p = new IndexAndProb { Index = i, Prob = Math.Exp(logPred[words.Length - 1, i]) };
+                //        pred.Add(p);
+                //        totalProb += p.Prob;
+                //    }
+                //    Console.WriteLine($"Total probability: {totalProb:F4}");
+                //    pred.Sort();
+                //    Console.WriteLine("Candidates are:");
+                //    pred.Take(10).Iter((x, o) =>
+                //    {
+                //        Console.WriteLine($" {x.Prob:P2} --> {ptb.IdToWord(x.Index)}");
+                //    });
+                //}
             }
         }
 
         private static void Main()
         {
-            Run(true);
+            Run1(true);
+            Run2(true);
+            Context.GpuContext(0).Dispose();
         }
     }
 }

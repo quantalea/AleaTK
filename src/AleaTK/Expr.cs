@@ -348,11 +348,17 @@ namespace AleaTK
         {
             if (disposing)
             {
-                foreach (var rcpt in _deviceMemoryReceipts)
+                try
                 {
-                    rcpt.Dispose();
+                    foreach (var rcpt in _deviceMemoryReceipts)
+                    {
+                        rcpt.Dispose();
+                    }
+                    _deviceMemoryReceipts.Clear();
                 }
-                _deviceMemoryReceipts.Clear();
+                catch (Exception)
+                {
+                }
             }
             base.Dispose(disposing);
         }

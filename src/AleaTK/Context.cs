@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using Alea;
+using Alea.cuRAND;
 using GpuStream = Alea.Stream;
 
 namespace AleaTK
@@ -97,6 +99,16 @@ namespace AleaTK
 
         public abstract Device Device { get; }
 
+        public abstract Alea.cuRAND.Generator CreateRandomGenerator(PseudoRandomType type);
+
+        private readonly ConcurrentDictionary<PseudoRandomType, Alea.cuRAND.Generator> _pseudoRandomGenerators =
+            new ConcurrentDictionary<PseudoRandomType, Generator>();  
+
+        public Alea.cuRAND.Generator GetRandomGenerator(PseudoRandomType type)
+        {
+            return _pseudoRandomGenerators.GetOrAdd(type, CreateRandomGenerator);
+        }
+
         public void EnsureType(ContextType targetType)
         {
             if (Type != targetType)
@@ -145,6 +157,18 @@ namespace AleaTK
             var key = new GpuContextKey(gpu.Device.Id, streamId);
             return GpuContexts.GetOrAdd(key, _ => new GpuContext(gpu));
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                foreach (var rng in _pseudoRandomGenerators.Values)
+                {
+                    rng.Dispose();
+                }
+            }
+            base.Dispose(disposing);
+        }
     }
 
     public sealed class CpuContext : Context
@@ -157,6 +181,18 @@ namespace AleaTK
         public override ContextType Type => ContextType.Cpu;
 
         public override Device Device { get; }
+
+        public override Generator CreateRandomGenerator(PseudoRandomType type)
+        {
+            switch (type)
+            {
+                case PseudoRandomType.Default:
+                    return Alea.cuRAND.Generator.CreateCpu(RngType.PSEUDO_DEFAULT);
+
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+        }
     }
 
     public sealed class GpuContext : Context
@@ -187,6 +223,22 @@ namespace AleaTK
 
         public override Device Device { get; }
 
+        public override Generator CreateRandomGenerator(PseudoRandomType type)
+        {
+            Generator rng;
+            switch (type)
+            {
+                case PseudoRandomType.Default:
+                    rng = Generator.CreateGpu(Gpu, RngType.PSEUDO_DEFAULT);
+                    break;
+
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+            rng.SetStream(Stream);
+            return rng;
+        }
+
         public GpuStream Stream { get; }
 
         public Gpu Gpu { get; }
@@ -197,11 +249,11 @@ namespace AleaTK
 
         protected override void Dispose(bool disposing)
         {
+            base.Dispose(disposing);
             if (disposing)
             {
                 if (!Stream.IsDefault) Stream.Dispose();
             }
-            base.Dispose(disposing);
         }
     }
 }

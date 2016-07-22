@@ -18,7 +18,7 @@ namespace AleaTK.ML.Operator
             Util.EnsureTrue(dropoutProb < 1.0);
 
             Input = input;
-            Output = Library.Variable<T>(input.Shape);
+            Output = Variable<T>(input.Shape);
 
             Scale = 1.0 / (1.0 - dropoutProb);
 

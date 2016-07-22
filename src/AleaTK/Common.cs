@@ -137,6 +137,11 @@ namespace AleaTK
         }
     }
 
+    public enum PseudoRandomType
+    {
+        Default = 0
+    }
+
     public struct Range
     {
         public readonly long Begin;

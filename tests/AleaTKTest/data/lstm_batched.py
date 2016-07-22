@@ -148,7 +148,7 @@ def forcsharp():
     X = np.random.randn(n,b,input_size)
     h0 = np.random.randn(b,d)
     c0 = np.random.randn(b,d)
-    H,_,_,cache = LSTM.forward(X, W, c0, h0)
+    H,cn,hn,cache = LSTM.forward(X, W, c0, h0)
 
     dH = np.random.randn(*H.shape)
     dX, dW, dc0, dh0 = LSTM.backward(dH, cache)
@@ -163,6 +163,8 @@ def forcsharp():
                     "W": W.transpose(),
                     "h0": h0.transpose(),
                     "c0": c0.transpose(),
+                    "hn": hn.transpose(),
+                    "cn": cn.transpose(),
                     "H": H.transpose(),
                     "dH": dH.transpose(),
                     "dX": dX.transpose(),
