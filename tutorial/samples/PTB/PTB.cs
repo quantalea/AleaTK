@@ -229,8 +229,8 @@ namespace Tutorial.Samples
         public const int TestMaxMaxEpoch = Profiling ? 1 : -1;
         public const int TestHiddenSize = -1;
         //public const ConfigType CfgType = ConfigType.Small;
-        //public const ConfigType CfgType = ConfigType.Medium;
-        public const ConfigType CfgType = ConfigType.Large;
+        public const ConfigType CfgType = ConfigType.Medium;
+        //public const ConfigType CfgType = ConfigType.Large;
 
         public class LSTM<T> : Differentiable
         {
