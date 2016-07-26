@@ -61,7 +61,7 @@ let metaData =
             Tags = [ComputerVision; Regression; Classification; RecurrentNeuralNets]
             SourceCodeLink = sourceCodeLinkCsharp "PTB"
             GitLink = gitLinkRoot + "PTB"
-            ImageLink = "images/mnist.png"
+            ImageLink = "images/rnn.svg"
             Src = "samples" @@ "PTB"
         }
     ]
