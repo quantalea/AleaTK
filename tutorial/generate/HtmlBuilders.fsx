@@ -66,6 +66,9 @@ let ensureReadmeFiles () =
         ensure tutorial
         ensure doc)
 
+let bib = design @@ "templates" @@ "references.bib"
+let csl = design @@ "templates" @@ "ieee-with-url.csl"
+
 let buildMainDoc clean =
     if clean then DeleteDirs [output]
     ensureDirectory output
@@ -74,8 +77,7 @@ let buildMainDoc clean =
         createTextFile runserver "python -m http.server 8080"
     designFolders |> List.iter copyToOutput
     let template = design @@ "templates" @@ "doc_page.html"
-    let bib = design @@ "templates" @@ "references.bib"
-    let opts = sprintf "--filter pandoc-eqnos --ascii --bibliography %s" bib
+    let opts = sprintf "--filter pandoc-eqnos --ascii --bibliography %s --filter pandoc-citeproc" bib 
     let toHtml filename = 
         let infile = tutorial @@ "doc" @@ filename
         let outfile = tutorial @@ "output" @@ filename
@@ -83,9 +85,8 @@ let buildMainDoc clean =
     documents |> List.iter toHtml
 
 let buildSampleExtendedDocWithAbstract () =
-    let template = tutorial @@ "generate" @@ "ExtendedSampleDoc.tpl"
-    let bib = design @@ "templates" @@ "references.bib"
-    let opts = sprintf "--filter pandoc-eqnos --ascii --bibliography %s" bib
+    let template = tutorial @@ "generate" @@ "ExtendedSampleDoc.tpl"    
+    let opts = sprintf "--filter pandoc-eqnos --ascii --bibliography %s --filter pandoc-citeproc" bib 
     ensureDirectory output
     SampleProjects.metaData |> List.iter (fun meta -> 
         let outfile = tutorial @@ "output" @@ meta.ExtendedDocFile
@@ -95,7 +96,6 @@ let buildSampleExtendedDocWithAbstract () =
         let extendedDoc = tutorial @@ meta.Src @@ "Extended.md"
         let abstractHtml = Pandoc.pandocString abstractDoc None opts
         let extendedHtml = Pandoc.pandocString extendedDoc None opts
-        // file is in samples, hence need to go up one directory
         ReplaceInFiles 
             [
                 "$title$", meta.Title

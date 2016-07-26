@@ -1,9 +1,45 @@
-@UNPUBLISHED{Zaremba-Sutskever-Vinyals:2015,
-  author =       {Zaremba, W. and Sutskever, I. and Vinyals, O.},
-  title =        {Recurrent Neural Network Regularization},
-  year =         {2015},
-  month =        {February},
-  note =         {\href{http://arxiv.org/abs/1409.2329}{http://arxiv.org/abs/1409.2329}}
+@article{DBLP:journals/corr/ZarembaSV14,
+  author    = {Wojciech Zaremba and
+               Ilya Sutskever and
+               Oriol Vinyals},
+  title     = {Recurrent Neural Network Regularization},
+  journal   = {CoRR},
+  volume    = {abs/1409.2329},
+  year      = {2014},
+  url       = {http://arxiv.org/abs/1409.2329},
+  timestamp = {Wed, 01 Oct 2014 15:00:04 +0200},
+  biburl    = {http://dblp.uni-trier.de/rec/bib/journals/corr/ZarembaSV14},
+  bibsource = {dblp computer science bibliography, http://dblp.org}
+}
+
+@article{DBLP:journals/corr/GreffSKSS15,
+  author    = {Klaus Greff and
+               Rupesh Kumar Srivastava and
+               Jan Koutn{\'{\i}}k and
+               Bas R. Steunebrink and
+               J{\"{u}}rgen Schmidhuber},
+  title     = {{LSTM:} {A} Search Space Odyssey},
+  journal   = {CoRR},
+  volume    = {abs/1503.04069},
+  year      = {2015},
+  url       = {http://arxiv.org/abs/1503.04069},
+  timestamp = {Thu, 09 Apr 2015 11:33:20 +0200},
+  biburl    = {http://dblp.uni-trier.de/rec/bib/journals/corr/GreffSKSS15},
+  bibsource = {dblp computer science bibliography, http://dblp.org}
+}
+
+@article{DBLP:journals/corr/AppleyardKB16,
+  author    = {Jeremy Appleyard and
+               Tom{\'{a}}s Kocisk{\'{y}} and
+               Phil Blunsom},
+  title     = {Optimizing Performance of Recurrent Neural Networks on GPUs},
+  journal   = {CoRR},
+  volume    = {abs/1604.01946},
+  year      = {2016},
+  url       = {http://arxiv.org/abs/1604.01946},
+  timestamp = {Mon, 02 May 2016 18:22:52 +0200},
+  biburl    = {http://dblp.uni-trier.de/rec/bib/journals/corr/AppleyardKB16},
+  bibsource = {dblp computer science bibliography, http://dblp.org}
 }
 
 @BOOK{Forsythe-Moler:1967,
@@ -13,54 +49,6 @@
   YEAR =         {1967}
 }
 
-@inproceedings{Gander-Golub:1997,
-    title = {Cyclic Reduction - History and Applications},
-    booktitle = {Proceedings of the Workshop on Scientific Computing},
-    author = {Gander, W. and Golub, G. H.},
-    year = {1997},
-    location = {Hong Kong},
-    eventtime = {March 10-12, 1997},
-    publisher = {Springer Verlag},
-    editor = {Gene Howard Golub}
-}
 
-@BOOK{Hockney-Jesshope:1988,
-  AUTHOR       = {Hockney, R. W. and Jesshope, C. R.},
-  TITLE        = {Parallel Computers 2: architecture, programming, and algorithms},
-  YEAR         = {1988},
-  edition =      {second},
-  PUBLISHER    = {Institute of Physics Publishing}
-}
 
-@ARTICLE{Stone:1973,
-  AUTHOR =       {Stone, H.},
-  TITLE =        {An efficient parallel algorithm for the solution of a tri-diagonal linear system of equations},
-  JOURNAL =      {Journal of the ACM},
-  YEAR =         {1973},
-  Volume =       {20},
-  Number =       {1},
-  pages =        {27-38}
-}
 
-@ARTICLE{Hockney:1965,
-  AUTHOR =       {Hockney, R. W.},
-  TITLE =        {A fast direct solution of {P}oisson's equation using {F}ourier analysis},
-  JOURNAL =      {Journal of the ACM},
-  YEAR =         {1965},
-  Volume =       {12},
-  Number =       {1},
-  pages =        {95-113}
-}
-
-@inproceedings{Zhang:2010,
-    title = {Fast Tridiagonal Solvers on the {GPU}},
-    booktitle = {Proceedings of the 15th ACM SIGPLAN Symposium on Principles and Practice of Parallel Programming (PPoPP 2010)},
-    author = {Yao Zhang AND Jonathan Cohen AND John D. Owens},
-    year = {2010},
-    month = {January},
-    keywords = {Tridiagonal Linear System, GPGPU, Performance Optimization},
-    pages = {10},
-    location = {Bangalore, India},
-    eventtime = {January 9-14, 2010},
-    abstract = {We study the performance of three parallel algorithms and their hybrid variants for solving tridiagonal linear systems on a GPU: cyclic reduction (CR), parallel cyclic reduction (PCR) and recursive doubling (RD). We develop an approach to measure, analyze, and optimize the performance of GPU programs in terms of memory access, computation, and control overhead. We find that CR enjoys linear algorithm complexity but suffers from more algorithmic steps and bank conflicts, while PCR and RD have fewer algorithmic steps but do more work each step. To combine the benefits of the basic algorithms, we propose hybrid CR+PCR and CR+RD algorithms, which improve the performance of PCR, RD and CR by 21%, 31% and 61% respectively. Our GPU solvers achieve up to a 28x speedup over a sequential LAPACK solver, and a 12x speedup over a multi-threaded CPU solver.}
-}
