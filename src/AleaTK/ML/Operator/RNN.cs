@@ -82,7 +82,38 @@ namespace AleaTK.ML.Operator
             }
         }
 
+        public static Tensor<T> GetGradient(Executor executor, Variable<T> var, bool zerolize = false)
+        {
+            var ctx = executor.Context;
+            var data = executor.GetData(var);
+            Util.EnsureTrue(data.GradientAggregationCounter == 0);
+            var shape = executor.GetTensor(var).Shape;
+            var gradient = executor.GetGradient(var, shape);
+            if (zerolize) ctx.Assign(gradient, Fill(shape, ScalarOps.Conv<T>(0.0)));
+            return gradient;
+        }
+
+        public static Tensor<T> GetGradient(Executor executor, Variable<T> var, Shape shape, bool zerolize = false)
+        {
+            var ctx = executor.Context;
+            var data = executor.GetData(var);
+            Util.EnsureTrue(data.GradientAggregationCounter == 0);
+            var gradient = executor.GetGradient(var, shape);
+            if (zerolize) ctx.Assign(gradient, Fill(shape, ScalarOps.Conv<T>(0.0)));
+            return gradient;
+        }
+
         public override void Forward(Executor executor)
+        {
+            Forward1(executor);
+        }
+
+        public override void Backward(Executor executor)
+        {
+            Backward1(executor);
+        }
+
+        public void Forward1(Executor executor)
         {
             var ctx = executor.Context;
             var w = executor.GetTensor(W);
@@ -155,28 +186,7 @@ namespace AleaTK.ML.Operator
             }
         }
 
-        public static Tensor<T> GetGradient(Executor executor, Variable<T> var, bool zerolize = false)
-        {
-            var ctx = executor.Context;
-            var data = executor.GetData(var);
-            Util.EnsureTrue(data.GradientAggregationCounter == 0);
-            var shape = executor.GetTensor(var).Shape;
-            var gradient = executor.GetGradient(var, shape);
-            if (zerolize) ctx.Assign(gradient, Fill(shape, ScalarOps.Conv<T>(0.0)));
-            return gradient;
-        }
-
-        public static Tensor<T> GetGradient(Executor executor, Variable<T> var, Shape shape, bool zerolize = false)
-        {
-            var ctx = executor.Context;
-            var data = executor.GetData(var);
-            Util.EnsureTrue(data.GradientAggregationCounter == 0);
-            var gradient = executor.GetGradient(var, shape);
-            if (zerolize) ctx.Assign(gradient, Fill(shape, ScalarOps.Conv<T>(0.0)));
-            return gradient;
-        }
-
-        public override void Backward(Executor executor)
+        public void Backward1(Executor executor)
         {
             var ctx = executor.Context;
             var one = 1.0.AsScalar<T>();
