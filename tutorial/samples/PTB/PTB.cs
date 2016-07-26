@@ -1475,13 +1475,13 @@ namespace Tutorial.Samples
             }
         }
 
-        // This model uses our LSTM implementation
-        public class Model1
+        public class Model
         {
-            public Model1(Context ctx, Config cfg, bool isTraining = true)
+            public Model(Context ctx, Config cfg, bool isTraining = true, bool usingCUDNN = true)
             {
                 Config = cfg;
                 IsTraining = isTraining;
+                UsingCUDNN = usingCUDNN;
 
                 Inputs = Variable<int>(PartialShape.Create(cfg.NumSteps, cfg.BatchSize));
                 Targets = Variable<int>(PartialShape.Create(cfg.NumSteps, cfg.BatchSize));
@@ -1496,16 +1496,29 @@ namespace Tutorial.Samples
                 }
 
                 // rnn layer, possible dropout for each lstm layer output
-                RNN = new LSTM<float>[cfg.NumLayers];
-                for (var i = 0; i < cfg.NumLayers; ++i)
+                if (usingCUDNN)
                 {
-                    var lstm = new LSTM<float>(i == 0 ? EmbeddedOutput : RNNOutput, cfg.HiddenSize, forgetBiasInit: 0.0);
-                    RNN[i] = lstm;
-                    RNNOutput = lstm.Y;
+                    RNN2 = new RNN<float>(EmbeddedOutput, cfg.NumLayers, cfg.HiddenSize, isTraining: isTraining, dropout: isTraining && cfg.KeepProb < 1.0 ? 1.0 - Config.KeepProb : 0.0, bias: 0.0);
+                    RNNOutput = RNN2.Y;
                     if (isTraining && cfg.KeepProb < 1.0)
                     {
                         var dropout = new Dropout<float>(RNNOutput, dropoutProb: 1.0 - cfg.KeepProb);
                         RNNOutput = dropout.Output;
+                    }
+                }
+                else
+                {
+                    RNN1 = new LSTM<float>[cfg.NumLayers];
+                    for (var i = 0; i < cfg.NumLayers; ++i)
+                    {
+                        var lstm = new LSTM<float>(i == 0 ? EmbeddedOutput : RNNOutput, cfg.HiddenSize, forgetBiasInit: 0.0);
+                        RNN1[i] = lstm;
+                        RNNOutput = lstm.Y;
+                        if (isTraining && cfg.KeepProb < 1.0)
+                        {
+                            var dropout = new Dropout<float>(RNNOutput, dropoutProb: 1.0 - cfg.KeepProb);
+                            RNNOutput = dropout.Output;
+                        }
                     }
                 }
 
@@ -1527,7 +1540,6 @@ namespace Tutorial.Samples
                 Optimizer.Forward();
                 if (isTraining)
                 {
-                    // TODO
                     Optimizer.Backward();
                 }
 
@@ -1536,35 +1548,60 @@ namespace Tutorial.Samples
                 ResetStates();
             }
 
-            public void CopyWeightsFrom(Model1 o)
+            public void CopyWeightsFrom(Model o)
             {
                 Optimizer.AssignTensor(Embedding.Weights, o.Optimizer.GetTensor(o.Embedding.Weights));
-                for (var i = 0; i < Config.NumLayers; ++i)
-                {
-                    Optimizer.AssignTensor(RNN[i].W, o.Optimizer.GetTensor(o.RNN[i].W));
-                }
                 Optimizer.AssignTensor(FC.Weights, o.Optimizer.GetTensor(o.FC.Weights));
                 Optimizer.AssignTensor(FC.Bias, o.Optimizer.GetTensor(o.FC.Bias));
+                if (UsingCUDNN)
+                {
+                    Util.EnsureTrue(o.UsingCUDNN);
+                    Optimizer.AssignTensor(RNN2.W, o.Optimizer.GetTensor(o.RNN2.W));
+                }
+                else
+                {
+                    Util.EnsureTrue(!o.UsingCUDNN);
+                    for (var i = 0; i < Config.NumLayers; ++i)
+                    {
+                        Optimizer.AssignTensor(RNN1[i].W, o.Optimizer.GetTensor(o.RNN1[i].W));
+                    }
+                }
             }
 
             public void ResetStates()
             {
-                for (var i = 0; i < Config.NumLayers; ++i)
+                if (UsingCUDNN)
                 {
-                    var lstm = RNN[i];
-                    var shape = Shape.Create(Config.BatchSize, lstm.HiddenSize);
-                    Optimizer.AssignTensor(lstm.CX, Fill(shape, 0.0f));
-                    Optimizer.AssignTensor(lstm.HX, Fill(shape, 0.0f));
+                    Optimizer.AssignTensor(RNN2.CX, Fill(Shape.Create(RNN2.CX.Shape.AsArray), 0.0f));
+                    Optimizer.AssignTensor(RNN2.HX, Fill(Shape.Create(RNN2.HX.Shape.AsArray), 0.0f));
+                }
+                else
+                {
+                    for (var i = 0; i < Config.NumLayers; ++i)
+                    {
+                        var lstm = RNN1[i];
+                        var shape = Shape.Create(Config.BatchSize, lstm.HiddenSize);
+                        Optimizer.AssignTensor(lstm.CX, Fill(shape, 0.0f));
+                        Optimizer.AssignTensor(lstm.HX, Fill(shape, 0.0f));
+                    }
                 }
             }
 
             public void CopyStates()
             {
-                for (var i = 0; i < Config.NumLayers; ++i)
+                if (UsingCUDNN)
                 {
-                    var lstm = RNN[i];
-                    Optimizer.AssignTensor(lstm.CX, Optimizer.GetTensor(lstm.CY));
-                    Optimizer.AssignTensor(lstm.HX, Optimizer.GetTensor(lstm.HY));
+                    Optimizer.AssignTensor(RNN2.CX, Optimizer.GetTensor(RNN2.CY));
+                    Optimizer.AssignTensor(RNN2.HX, Optimizer.GetTensor(RNN2.HY));
+                }
+                else
+                {
+                    for (var i = 0; i < Config.NumLayers; ++i)
+                    {
+                        var lstm = RNN1[i];
+                        Optimizer.AssignTensor(lstm.CX, Optimizer.GetTensor(lstm.CY));
+                        Optimizer.AssignTensor(lstm.HX, Optimizer.GetTensor(lstm.HY));
+                    }
                 }
             }
 
@@ -1626,6 +1663,8 @@ namespace Tutorial.Samples
 
             public bool IsTraining { get; }
 
+            public bool UsingCUDNN { get; }
+
             public Variable<int> Inputs { get; }
 
             public Variable<int> Targets { get; }
@@ -1634,7 +1673,9 @@ namespace Tutorial.Samples
 
             public Variable<float> EmbeddedOutput { get; }
 
-            public LSTM<float>[] RNN { get; } 
+            public LSTM<float>[] RNN1 { get; } 
+
+            public RNN<float> RNN2 { get; } 
 
             public Variable<float> RNNOutput { get; }
 
@@ -1648,291 +1689,18 @@ namespace Tutorial.Samples
         [Test, Ignore("To long to run, please explicitly run it.")]
         public static void Run1()
         {
-            Run1(false, CfgType);
-        }
-
-        public static void Run1(bool isConsole, ConfigType cfgType)
-        {
-            Console.WriteLine($"Scratch Version, Config: {cfgType}");
-
-            var ptb = new Data(DataPath);
-            var ctx = Context.GpuContext(0);
-
-            Config cfg, cfgValid, cfgTest, cfgInteractive;
-
-            switch (cfgType)
-            {
-                case ConfigType.Small:
-                    cfg = Config.Small(batchSize: 20);
-                    cfgValid = Config.Small(batchSize: 20);
-                    cfgTest = Config.Small(batchSize: 1, numSteps: 1);
-                    cfgInteractive = Config.Small(batchSize: 1, numSteps: 10);
-                    break;
-                case ConfigType.Medium:
-                    cfg = Config.Medium(batchSize: 20);
-                    cfgValid = Config.Medium(batchSize: 20);
-                    cfgTest = Config.Medium(batchSize: 1, numSteps: 1);
-                    cfgInteractive = Config.Medium(batchSize: 1, numSteps: 10);
-                    break;
-                case ConfigType.Large:
-                    cfg = Config.Large(batchSize: 20);
-                    cfgValid = Config.Large(batchSize: 20);
-                    cfgTest = Config.Large(batchSize: 1, numSteps: 1);
-                    cfgInteractive = Config.Large(batchSize: 1, numSteps: 10);
-                    break;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(cfgType), cfgType, null);
-            }
-
-            Assert.AreEqual(ptb.WordToIdDict.Count, cfg.VocabSize);
-            Assert.AreEqual(ptb.WordToIdDict.Count, cfgValid.VocabSize);
-            Assert.AreEqual(ptb.WordToIdDict.Count, cfgTest.VocabSize);
-            Assert.AreEqual(ptb.WordToIdDict.Count, cfgInteractive.VocabSize);
-
-            var model = new Model1(ctx, cfg, isTraining: true);
-            var modelValid = new Model1(ctx, cfgValid, isTraining: false);
-            var modelTest = new Model1(ctx, cfgTest, isTraining: false);
-            var modelInteractive = new Model1(ctx, cfgInteractive, isTraining: false);
-
-            for (var i = 0; i < cfg.MaxMaxEpoch; ++i)
-            {
-                var lrDecay = Math.Pow(cfg.LrDecay, Math.Max(i - cfg.MaxEpoch, 0.0));
-                var learningRate = cfg.LearningRate*lrDecay;
-
-                Console.WriteLine($"Epoch: {i + 1} Learning rate: {learningRate:F3}");
-                var trainPerplexity = model.RunEpoch(ptb.TrainData, learningRate: learningRate, verbose: true);
-                Console.WriteLine($"Epoch: {i + 1} Train Perplexity: {trainPerplexity:F3}");
-
-                if (!Profiling)
-                {
-                    modelValid.CopyWeightsFrom(model);
-                    var validPerplexity = modelValid.RunEpoch(ptb.ValidData);
-                    Console.WriteLine($"Epoch: {i + 1} Valid Perplexity: {validPerplexity:F3}");
-                }
-            }
-
-            if (!Profiling)
-            {
-                modelTest.CopyWeightsFrom(model);
-                Console.WriteLine("Testing with test data, this is slow, since batch size is set to small...");
-                var testPerplexity = modelTest.RunEpoch(ptb.TestData, verbose: true);
-                Console.WriteLine($"Test Perplexity: {testPerplexity:F3}");
-            }
-
-            if (!Profiling && isConsole)
-            {
-                var inputs = new int[cfgInteractive.NumSteps, 1];
-                modelInteractive.CopyWeightsFrom(model);
-                // since the entropy and softmax are merged , so we have to allocate the target (label) tensor
-                // this could be improved , by adding some null checking?
-                modelInteractive.Optimizer.AssignTensor(modelInteractive.Targets, inputs.AsTensor());
-
-                while (true)
-                {
-                    Console.WriteLine();
-                    Console.WriteLine($"Enter some words (less than {cfgInteractive.NumSteps} words)");
-                    var readLine = Console.ReadLine();
-                    if (readLine == null) break;
-                    var line = readLine.Trim(' ', '\t', '\r', '\n');
-                    var words = line.Split(new[] {' ', '\t', '\r', '\n'}, StringSplitOptions.RemoveEmptyEntries);
-                    if (words.Length <= 0 || words.Length > cfgInteractive.NumSteps) continue;
-
-                    for (var i = 0; i < cfgInteractive.NumSteps; ++i)
-                    {
-                        if (i < words.Length)
-                        {
-                            inputs[i, 0] = ptb.WordToId(words[i]);
-                        }
-                        else
-                        {
-                            inputs[i, 0] = ptb.WordToId("<unk>");
-                        }
-                    }
-
-                    Console.WriteLine("Your inputs are:");
-                    for (var i = 0; i < cfgInteractive.NumSteps; ++i)
-                    {
-                        Console.Write($"{ptb.IdToWord(inputs[i, 0])} ");
-                    }
-                    Console.WriteLine();
-
-                    modelInteractive.ResetStates();
-                    modelInteractive.Optimizer.AssignTensor(modelInteractive.Inputs, inputs.AsTensor());
-                    modelInteractive.Optimizer.Forward();
-
-                    var logPred = modelInteractive.Optimizer.GetTensor(modelInteractive.Loss.LogPred).ToArray2D();
-                    var pred = new List<IndexAndProb>();
-                    var totalProb = 0.0;
-                    for (var i = 0; i < cfgInteractive.VocabSize; ++i)
-                    {
-                        var p = new IndexAndProb {Index = i, Prob = Math.Exp(logPred[words.Length - 1, i])};
-                        pred.Add(p);
-                        totalProb += p.Prob;
-                    }
-                    Console.WriteLine($"Total probability: {totalProb:F4}");
-                    pred.Sort();
-                    Console.WriteLine("Candidates are:");
-                    pred.Take(10).Iter((x, o) => { Console.WriteLine($" {x.Prob:P2} --> {ptb.IdToWord(x.Index)}"); });
-                }
-            }
-        }
-
-        // This model uses cuDNN version
-        public class Model2
-        {
-            public Model2(Context ctx, Config cfg, bool isTraining = true)
-            {
-                Config = cfg;
-                IsTraining = isTraining;
-
-                Inputs = Variable<int>(PartialShape.Create(Config.NumSteps, Config.BatchSize));
-                Targets = Variable<int>(PartialShape.Create(Config.NumSteps, Config.BatchSize));
-
-                Embedding = new Embedding<float>(Inputs, cfg.VocabSize, cfg.HiddenSize, initScale: cfg.InitScale);
-                EmbeddedOutput = Embedding.Output;
-                if (isTraining && cfg.KeepProb < 1.0)
-                {
-                    var dropout = new Dropout<float>(EmbeddedOutput, dropoutProb: 1.0 - cfg.KeepProb);
-                    EmbeddedOutput = dropout.Output;
-                }
-
-                // rnn layer
-                RNN = new RNN<float>(EmbeddedOutput, cfg.NumLayers, cfg.HiddenSize, isTraining: isTraining, dropout: isTraining && cfg.KeepProb < 1.0 ? 1.0 - Config.KeepProb : 0.0, bias: 0.0);
-                RNNOutput = RNN.Y;
-                if (isTraining && cfg.KeepProb < 1.0)
-                {
-                    var dropout = new Dropout<float>(RNNOutput, dropoutProb: 1.0 - cfg.KeepProb);
-                    RNNOutput = dropout.Output;
-                }
-
-                FC = new FullyConnected<float>(RNNOutput.Reshape(RNNOutput.Shape[0]*RNNOutput.Shape[1], RNNOutput.Shape[2]), cfg.VocabSize);
-
-                Loss = new SoftmaxCrossEntropySparse<float>(FC.Output, Targets.Reshape(Targets.Shape[0]*Targets.Shape[1]));
-
-                Optimizer = new GradientDescentOptimizer(ctx, Loss.Loss, Config.LearningRate, new GlobalNormGradientClipper(Config.MaxGradNorm));
-
-                // warmup (for JIT, and better timing measure)
-                Optimizer.Initalize();
-                ResetStates();
-                Optimizer.AssignTensor(Inputs, Fill(Shape.Create(Inputs.Shape.AsArray), 0));
-                Optimizer.AssignTensor(Targets, Fill(Shape.Create(Targets.Shape.AsArray), 0));
-                Optimizer.Forward();
-                if (isTraining)
-                {
-                    // TODO
-                    Optimizer.Backward();
-                }
-
-                // now reset states
-                Optimizer.Initalize();
-                ResetStates();
-            }
-
-            public void CopyWeightsFrom(Model2 o)
-            {
-                Optimizer.AssignTensor(Embedding.Weights, o.Optimizer.GetTensor(o.Embedding.Weights));
-                Optimizer.AssignTensor(RNN.W, o.Optimizer.GetTensor(o.RNN.W));
-                Optimizer.AssignTensor(FC.Weights, o.Optimizer.GetTensor(o.FC.Weights));
-                Optimizer.AssignTensor(FC.Bias, o.Optimizer.GetTensor(o.FC.Bias));
-            }
-
-            public void ResetStates()
-            {
-                Optimizer.AssignTensor(RNN.CX, Fill(Shape.Create(RNN.CX.Shape.AsArray), 0.0f));
-                Optimizer.AssignTensor(RNN.HX, Fill(Shape.Create(RNN.HX.Shape.AsArray), 0.0f));
-            }
-
-            public void CopyStates()
-            {
-                Optimizer.AssignTensor(RNN.CX, Optimizer.GetTensor(RNN.CY));
-                Optimizer.AssignTensor(RNN.HX, Optimizer.GetTensor(RNN.HY));
-            }
-
-            public double RunEpoch(int[] data, double learningRate = 1.0, bool verbose = false)
-            {
-                var epochSize = (data.Length/Config.BatchSize - 1)/Config.NumSteps;
-                var time = Stopwatch.StartNew();
-                var costs = 0.0;
-                var iters = 0;
-                var step = 0;
-                var firstBatch = true;
-
-                foreach (var batch in Data.Iterator(data, Config.NumSteps, Config.BatchSize))
-                {
-                    Optimizer.AssignTensor(Inputs, batch.Inputs.AsTensor());
-                    Optimizer.AssignTensor(Targets, batch.Targets.AsTensor());
-
-                    if (firstBatch)
-                    {
-                        // set h0 and c0 to 0 at each epoch start
-                        ResetStates();
-                        firstBatch = false;
-                    }
-                    else
-                    {
-                        CopyStates();
-                    }
-
-                    Optimizer.Forward();
-
-                    if (IsTraining)
-                    {
-                        Optimizer.Backward();
-                        Optimizer.Optimize(learningRate);
-                    }
-
-                    var loss = Optimizer.GetTensor(Loss.Loss).ToScalar();
-                    var cost = loss/Config.BatchSize;
-                    costs += cost;
-                    iters += Config.NumSteps;
-
-                    if (Profiling || (verbose && (step%(epochSize/10) == 10)))
-                    {
-                        var perplexity = Math.Exp(costs/iters);
-                        var wps = (iters*Config.BatchSize)/(time.Elapsed.TotalMilliseconds/1000.0);
-
-                        Console.WriteLine($"{step:D4}: {step*1.0/epochSize:F3} perplexity: {perplexity:F3} speed:{wps:F0} wps cost: {cost:F3}");
-                    }
-
-                    if (Profiling && step > 5) break;
-
-                    step++;
-                }
-                return Math.Exp(costs/iters);
-            }
-
-            public Config Config { get; }
-
-            public bool IsTraining { get; }
-
-            public Variable<int> Inputs { get; }
-
-            public Variable<int> Targets { get; }
-
-            public Embedding<float> Embedding { get; }
-
-            public Variable<float> EmbeddedOutput { get; }
-
-            public RNN<float> RNN { get; }
-
-            public Variable<float> RNNOutput { get; }
-
-            public FullyConnected<float> FC { get; }
-
-            public SoftmaxCrossEntropySparse<float> Loss { get; }
-
-            public GradientDescentOptimizer Optimizer { get; }
+            Run(false, CfgType, false);
         }
 
         [Test, Ignore("To long to run, please explicitly run it.")]
         public static void Run2()
         {
-            Run2(false, CfgType);
+            Run(false, CfgType, true);
         }
 
-        public static void Run2(bool isConsole, ConfigType cfgType)
+        public static void Run(bool isConsole, ConfigType cfgType, bool usingCUDNN)
         {
-            Console.WriteLine($"cuDNN Version, Config: {cfgType}");
+            Console.WriteLine($"UsingCUDNN({usingCUDNN}), Config: {cfgType}");
 
             var ptb = new Data(DataPath);
             var ctx = Context.GpuContext(0);
@@ -1968,10 +1736,10 @@ namespace Tutorial.Samples
             Assert.AreEqual(ptb.WordToIdDict.Count, cfgTest.VocabSize);
             Assert.AreEqual(ptb.WordToIdDict.Count, cfgInteractive.VocabSize);
 
-            var model = new Model2(ctx, cfg, isTraining: true);
-            var modelValid = new Model2(ctx, cfgValid, isTraining: false);
-            var modelTest = new Model2(ctx, cfgTest, isTraining: false);
-            var modelInteractive = new Model2(ctx, cfgInteractive, isTraining: false);
+            var model = new Model(ctx, cfg, isTraining: true, usingCUDNN: usingCUDNN);
+            var modelValid = new Model(ctx, cfgValid, isTraining: false, usingCUDNN: usingCUDNN);
+            var modelTest = new Model(ctx, cfgTest, isTraining: false, usingCUDNN: usingCUDNN);
+            var modelInteractive = new Model(ctx, cfgInteractive, isTraining: false, usingCUDNN: usingCUDNN);
 
             for (var i = 0; i < cfg.MaxMaxEpoch; ++i)
             {
@@ -2060,17 +1828,14 @@ namespace Tutorial.Samples
         {
             if (Profiling)
             {
-                Run1(false, CfgType);
-                Run2(false, CfgType);
+                Run(false, CfgType, false);
+                Run(false, CfgType, true);
             }
             else
             {
-                //Run1(true, CfgType);
-                Run2(true, CfgType);
+                //Run1(true, CfgType, false);
+                Run(true, CfgType, true);
             }
-
-            // This line is an alea bug, will be fixed with new alea release.
-            Context.GpuContext(0).Dispose();
         }
     }
 }
