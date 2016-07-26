@@ -5,6 +5,7 @@ using AleaTK;
 using NUnit.Framework;
 using Context = AleaTK.Context;
 using static AleaTK.Library;
+using static AleaTKUtil.Common;
 using static AleaTKTest.Common;
 
 namespace AleaTKTest

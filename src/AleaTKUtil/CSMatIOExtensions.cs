@@ -2,7 +2,7 @@ using System;
 using csmatio.io;
 using csmatio.types;
 
-namespace AleaTKTest
+namespace AleaTKUtil
 {
     public static class CSMatIOExtensions
     {
@@ -59,6 +59,7 @@ namespace AleaTKTest
             var darray = (MLUInt32)marray;
             return darray.GetReal(0);
         }
+
         public static float[] GetSingleArray(this MatFileReader reader, string name)
         {
             var marray = reader.GetMLArray(name);
@@ -70,6 +71,7 @@ namespace AleaTKTest
                 data[i] = darray.GetReal(i);
             return data;
         }
+
         public static double[] GetDoubleArray(this MatFileReader reader, string name)
         {
             var marray = reader.GetMLArray(name);

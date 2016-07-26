@@ -8,7 +8,7 @@ using csmatio.types;
 using NUnit.Framework;
 using static AleaTK.Library;
 using static AleaTK.ML.Library;
-using static AleaTKTest.Common;
+using static AleaTKUtil.Common;
 
 namespace AleaTKTest
 {

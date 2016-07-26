@@ -7,7 +7,7 @@
     <ProjectGuid>{EC890853-7BCF-4C35-A714-FFB81776E433}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>PTB</RootNamespace>
+    <RootNamespace>Tutorial.Samples</RootNamespace>
     <AssemblyName>PTB</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -68,6 +68,10 @@
   </Target>
   -->
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\AleaTKUtil\AleaTKUtil.csproj">
+      <Project>{19810d0a-bd63-4360-aca3-1db47c91e0a3}</Project>
+      <Name>AleaTKUtil</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\..\src\AleaTK\AleaTK.csproj">
       <Project>{ec47c435-0d7d-4819-be05-11b9e57fb8f3}</Project>
       <Name>AleaTK</Name>

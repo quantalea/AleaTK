@@ -13,208 +13,17 @@ using Alea.Parallel;
 using AleaTK;
 using AleaTK.ML;
 using AleaTK.ML.Operator;
+using AleaTKUtil;
 using csmatio.io;
-using csmatio.types;
 using NUnit.Framework;
-using ICSharpCode.SharpZipLib;
 using ICSharpCode.SharpZipLib.Tar;
 using static AleaTK.Library;
 using static AleaTK.ML.Library;
+using static AleaTKUtil.Common;
 using Context = AleaTK.Context;
 
 namespace Tutorial.Samples
 {
-    internal static class TrainPTBUtil
-    {
-        public static void Iter<T>(this IEnumerable<T> ie, Action<T, int> action)
-        {
-            var i = 0;
-            foreach (var e in ie)
-            {
-                action(e, i++);
-            }
-        }
-
-        public static void AreClose(double[] expected, double[] actual, double error)
-        {
-            if (expected.Length != actual.Length)
-            {
-                Assert.Fail($"Length doesn't match: {expected.Length} vs {actual.Length}");
-            }
-
-            for (var i = 0; i < expected.Length; ++i)
-            {
-                Assert.That(actual[i], Is.EqualTo(expected[i]).Within(error));
-            }
-        }
-
-        public static void AreClose(float[] expected, float[] actual, double error)
-        {
-            if (expected.Length != actual.Length)
-            {
-                Assert.Fail($"Length doesn't match: {expected.Length} vs {actual.Length}");
-            }
-
-            for (var i = 0; i < expected.Length; ++i)
-            {
-                Assert.That(actual[i], Is.EqualTo(expected[i]).Within(error));
-            }
-        }
-
-        public static void AreClose(double[,] expected, double[,] actual, double error)
-        {
-            Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
-            Assert.AreEqual(expected.GetLength(1), actual.GetLength(1));
-            for (var row = 0; row < expected.GetLength(0); ++row)
-            {
-                for (var col = 0; col < expected.GetLength(1); ++col)
-                {
-                    Assert.That(actual[row, col], Is.EqualTo(expected[row, col]).Within(error));
-                }
-            }
-        }
-
-        public static void AreClose(float[,] expected, float[,] actual, double error)
-        {
-            Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
-            Assert.AreEqual(expected.GetLength(1), actual.GetLength(1));
-            for (var row = 0; row < expected.GetLength(0); ++row)
-            {
-                for (var col = 0; col < expected.GetLength(1); ++col)
-                {
-                    Assert.That(actual[row, col], Is.EqualTo(expected[row, col]).Within(error));
-                }
-            }
-        }
-    }
-
-    internal static class CSMatIOExtensions
-    {
-        public static float GetSingle(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsSingle) throw new InvalidCastException("data is not of type float");
-            var n = marray.Size;
-            var darray = (MLSingle)marray;
-            return darray.GetReal(0);
-        }
-
-        public static double GetDouble(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsDouble) throw new InvalidCastException("data is not of type double");
-            var n = marray.Size;
-            var darray = (MLDouble)marray;
-            return darray.GetReal(0);
-        }
-
-        public static Int64 GetInt64(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsInt64) throw new InvalidCastException("data is not of type Int64");
-            var n = marray.Size;
-            var darray = (MLInt64)marray;
-            return darray.GetReal(0);
-        }
-
-        public static UInt64 GetUInt64(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsUInt64) throw new InvalidCastException("data is not of type UInt64");
-            var n = marray.Size;
-            var darray = (MLUInt64)marray;
-            return darray.GetReal(0);
-        }
-
-        public static int GetInt(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsInt32) throw new InvalidCastException("data is not of type Int32");
-            var n = marray.Size;
-            var darray = (MLInt32)marray;
-            return darray.GetReal(0);
-        }
-
-        public static uint GetUInt(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsUInt32) throw new InvalidCastException("data is not of type UInt32");
-            var n = marray.Size;
-            var darray = (MLUInt32)marray;
-            return darray.GetReal(0);
-        }
-        public static float[] GetSingleArray(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsSingle) throw new InvalidCastException("data is not of type float");
-            var n = marray.Size;
-            var darray = (MLSingle)marray;
-            var data = new float[n];
-            for (var i = 0; i < n; ++i)
-                data[i] = darray.GetReal(i);
-            return data;
-        }
-        public static double[] GetDoubleArray(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsDouble) throw new InvalidCastException("data is not of type double");
-            var n = marray.Size;
-            var darray = (MLDouble)marray;
-            var data = new double[n];
-            for (var i = 0; i < n; ++i)
-                data[i] = darray.GetReal(i);
-            return data;
-        }
-
-        public static Int64[] GetInt64Array(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsInt64) throw new InvalidCastException("data is not of type Int64");
-            var n = marray.Size;
-            var darray = (MLInt64)marray;
-            var data = new Int64[n];
-            for (var i = 0; i < n; ++i)
-                data[i] = darray.GetReal(i);
-            return data;
-        }
-
-        public static UInt64[] GetUInt64Array(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsUInt64) throw new InvalidCastException("data is not of type UInt64");
-            var n = marray.Size;
-            var darray = (MLUInt64)marray;
-            var data = new UInt64[n];
-            for (var i = 0; i < n; ++i)
-                data[i] = darray.GetReal(i);
-            return data;
-        }
-
-        public static int[] GetInt32Array(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsInt32) throw new InvalidCastException("data is not of type Int32");
-            var n = marray.Size;
-            var darray = (MLInt32)marray;
-            var data = new int[n];
-            for (var i = 0; i < n; ++i)
-                data[i] = darray.GetReal(i);
-            return data;
-        }
-
-        public static uint[] GetUInt32Array(this MatFileReader reader, string name)
-        {
-            var marray = reader.GetMLArray(name);
-            if (!marray.IsUInt32) throw new InvalidCastException("data is not of type UInt32");
-            var n = marray.Size;
-            var darray = (MLUInt32)marray;
-            var data = new uint[n];
-            for (var i = 0; i < n; ++i)
-                data[i] = darray.GetReal(i);
-            return data;
-        }
-    }
-
     public static class TrainPTB
     {
         public enum ConfigType
@@ -918,7 +727,7 @@ namespace Tutorial.Samples
             var myH = exe.GetTensor(lstm.Y).ToArray();
             myH.AsTensor(Shape.Create(seqLength * batchSize, hiddenSize)).Print();
 
-            TrainPTBUtil.AreClose(H, myH, 1e-6);
+            AreClose(H, myH, 1e-6);
 
             var CN = mfr.GetDoubleArray("cn").Select(n => (float)n).ToArray();
             CN.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
@@ -926,7 +735,7 @@ namespace Tutorial.Samples
             var myCN = exe.GetTensor(lstm.CY).ToArray();
             myCN.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
 
-            TrainPTBUtil.AreClose(CN, myCN, 1e-6);
+            AreClose(CN, myCN, 1e-6);
 
             var HN = mfr.GetDoubleArray("hn").Select(n => (float)n).ToArray();
             HN.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
@@ -934,7 +743,7 @@ namespace Tutorial.Samples
             var myHN = exe.GetTensor(lstm.HY).ToArray();
             myHN.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
 
-            TrainPTBUtil.AreClose(HN, myHN, 1e-6);
+            AreClose(HN, myHN, 1e-6);
 
             var dH = mfr.GetDoubleArray("dH").Select(n => (float)n).ToArray();
             exe.AssignGradientDirectly(lstm.Y, dH.AsTensor(Shape.Create(seqLength, batchSize, hiddenSize)));
@@ -946,28 +755,28 @@ namespace Tutorial.Samples
 
             var dXmy = exe.GetGradient(lstm.X).ToArray();
             dXmy.AsTensor(Shape.Create(seqLength * batchSize, inputSize)).Print();
-            TrainPTBUtil.AreClose(dX, dXmy, 1e-6);
+            AreClose(dX, dXmy, 1e-6);
 
             var dW = mfr.GetDoubleArray("dW").Select(n => (float)n).ToArray();
             dW.AsTensor(Shape.Create(inputSize + hiddenSize + 1, 4 * hiddenSize)).Print();
 
             var dWmy = exe.GetGradient(lstm.W).ToArray();
             dWmy.AsTensor(Shape.Create(lstm.W.Shape.AsArray)).Print();
-            TrainPTBUtil.AreClose(dW, dWmy, 1e-6);
+            AreClose(dW, dWmy, 1e-6);
 
             var dc0 = mfr.GetDoubleArray("dc0").Select(n => (float)n).ToArray();
             dc0.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
 
             var dc0my = exe.GetGradient(lstm.CX).ToArray();
             dc0my.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
-            TrainPTBUtil.AreClose(dc0, dc0my, 1e-6);
+            AreClose(dc0, dc0my, 1e-6);
 
             var dh0 = mfr.GetDoubleArray("dh0").Select(n => (float)n).ToArray();
             dh0.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
 
             var dh0my = exe.GetGradient(lstm.HX).ToArray();
             dh0my.AsTensor(Shape.Create(batchSize, hiddenSize)).Print();
-            TrainPTBUtil.AreClose(dh0, dh0my, 1e-6);
+            AreClose(dh0, dh0my, 1e-6);
 
             ctx.ToGpuContext().Stream.Synchronize();
         }
@@ -1023,7 +832,7 @@ namespace Tutorial.Samples
             {
                 // calc with cuDNN
                 var x = Variable<float>(PartialShape.Create(seqLength, batchSize, inputSize));
-                var lstm = new RNN<float>(x, 1, hiddenSize, dropout: 0.0);
+                var lstm = new RNN<float>(new LSTMRNNType(), x, 1, hiddenSize, dropout: 0.0);
                 var exe = new Executor(ctx, lstm.Y);
                 exe.Initalize();
 
@@ -1192,31 +1001,31 @@ namespace Tutorial.Samples
 
             //y1.AsTensor(Shape.Create(seqLength*batchSize, hiddenSize)).Print();
             //y2.AsTensor(Shape.Create(seqLength*batchSize, hiddenSize)).Print();
-            TrainPTBUtil.AreClose(y1.AsTensor().ToArray(), y2.AsTensor().ToArray(), error);
+            AreClose(y1.AsTensor().ToArray(), y2.AsTensor().ToArray(), error);
 
             //cy1.AsTensor().Print();
             //cy2.AsTensor().Print();
-            TrainPTBUtil.AreClose(cy1, cy2, error);
+            AreClose(cy1, cy2, error);
 
             //hy1.AsTensor().Print();
             //hy2.AsTensor().Print();
-            TrainPTBUtil.AreClose(hy1, hy2, error);
+            AreClose(hy1, hy2, error);
 
             //dx1.AsTensor(Shape.Create(seqLength * batchSize, inputSize)).Print();
             //dx2.AsTensor(Shape.Create(seqLength * batchSize, inputSize)).Print();
-            TrainPTBUtil.AreClose(dx1.AsTensor().ToArray(), dx2.AsTensor().ToArray(), error);
+            AreClose(dx1.AsTensor().ToArray(), dx2.AsTensor().ToArray(), error);
 
             //dcx1.AsTensor().Print();
             //dcx2.AsTensor().Print();
-            TrainPTBUtil.AreClose(dcx1, dcx2, error);
+            AreClose(dcx1, dcx2, error);
 
             //dhx1.AsTensor().Print();
             //dhx2.AsTensor().Print();
-            TrainPTBUtil.AreClose(dhx1, dhx2, error);
+            AreClose(dhx1, dhx2, error);
 
             //dw1.AsTensor().Print();
             //dw2.AsTensor().Print();
-            TrainPTBUtil.AreClose(dw1, dw2, error);
+            AreClose(dw1, dw2, error);
         }
 
         public class Config
@@ -1498,7 +1307,7 @@ namespace Tutorial.Samples
                 // rnn layer, possible dropout for each lstm layer output
                 if (usingCUDNN)
                 {
-                    RNN2 = new RNN<float>(EmbeddedOutput, cfg.NumLayers, cfg.HiddenSize, isTraining: isTraining, dropout: isTraining && cfg.KeepProb < 1.0 ? 1.0 - Config.KeepProb : 0.0, bias: 0.0);
+                    RNN2 = new RNN<float>(new LSTMRNNType(forgetBiasInit: 0.0), EmbeddedOutput, cfg.NumLayers, cfg.HiddenSize, isTraining: isTraining, dropout: isTraining && cfg.KeepProb < 1.0 ? 1.0 - Config.KeepProb : 0.0);
                     RNNOutput = RNN2.Y;
                     if (isTraining && cfg.KeepProb < 1.0)
                     {

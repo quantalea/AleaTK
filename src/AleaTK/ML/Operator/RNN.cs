@@ -8,18 +8,54 @@ using static AleaTK.ML.Library;
 
 namespace AleaTK.ML.Operator
 {
+    public abstract class RNNType
+    {
+        public abstract RNNMode Mode { get; }
+
+        public abstract int NumLinLayers { get; }
+
+        public abstract void InitBias<T>(Context ctx, int layerId, int linLayerId, Tensor<T> tensor);
+    }
+
+    public sealed class LSTMRNNType : RNNType
+    {
+        public LSTMRNNType(double forgetBiasInit = 0.0)
+        {
+            ForgetBiasInit = forgetBiasInit;
+        }
+
+        public double ForgetBiasInit { get; }
+
+        public override RNNMode Mode { get; } = RNNMode.LSTM;
+
+        public override int NumLinLayers { get; } = 8;
+
+        public override void InitBias<T>(Context ctx, int layerId, int linLayerId, Tensor<T> tensor)
+        {
+            // cuDNN LSTM layout is: IFAO, bias has 2x4, we ignore the second set of bias
+            // so only the first forget bias needs to be set, which is linLayerId = 1
+            if (linLayerId == 1)
+            {
+                ctx.Assign(tensor, ScalarOps.Conv<T>(ForgetBiasInit));
+            }
+            else
+            {
+                ctx.Assign(tensor, ScalarOps.Conv<T>(0.0));
+            }
+        }
+    }
+
     public class RNN<T> : Differentiable
     {
-        public RNN(Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, double bias = 0.0, ulong dropoutSeed = 1337UL)
+        public RNN(RNNType ty, Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, ulong dropoutSeed = 1337UL)
         {
+            Type = ty;
             X = x;
             IsTraining = isTraining;
             NumLayers = numLayers;
             HiddenSize = hiddenSize;
-            Bias = bias;
             Dropout = isTraining ? dropout : 0.0;
             DropoutSeed = dropoutSeed;
-            Util.EnsureTrue(bias == 0.0, "bias need TODO");
 
             // X shape (seqLength, batch, inputSize)
             Util.EnsureEqual(3, X.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
@@ -73,11 +109,11 @@ namespace AleaTK.ML.Operator
             AddAuxVar(ReserveSpace);
         }
 
+        public RNNType Type { get; }
+
         public bool IsTraining { get; }
 
         public double Dropout { get; }
-
-        public double Bias { get; }
 
         public ulong DropoutSeed { get; }
 
@@ -138,7 +174,7 @@ namespace AleaTK.ML.Operator
 
             // rnn descriptor
             var rnnDesc = executor.RnnDescDict[RnnDesc];
-            var mode = RNNMode.LSTM;
+            var mode = Type.Mode;
             rnnDesc.Set(HiddenSize, NumLayers, dropoutDesc, RNNInputMode.LINEAR_INPUT, DirectionMode.UNIDIRECTIONAL,
                 mode, Dnn.DataTypeOf<T>());
 
@@ -180,8 +216,8 @@ namespace AleaTK.ML.Operator
                 executor.GetGradient(CX, (Shape.Create(CX.Shape.AsArray)));
             }
 
-            // set LSTM weights
-            var numLinearLayers = 8; // now we fixed it, hard code LSTM
+            // init weights
+            var numLinearLayers = Type.NumLinLayers;
 
             using (var filterDesc = new FilterDescriptor())
             {
@@ -228,9 +264,7 @@ namespace AleaTK.ML.Operator
                         var linLayerBiasTensor = new Tensor<T>(linLayerBiasBuffer);
                         //offset = (linLayerBiasTensor.Buffer.Ptr.Handle.ToInt64() - w.Buffer.Ptr.Handle.ToInt64())/Gpu.SizeOf<T>();
                         //Console.WriteLine($"b.{layer}.{linLayerId}: {offset} {nbDims} {Shape.Create(filterDimA.Select(ll => (long)ll).ToArray())} {dataType} {format}");
-                        // TODO: need check, there are 8 matrices, but usually you only need set 4 of them
-                        context.Assign(linLayerBiasTensor, ScalarOps.Conv<T>(Bias));
-                        //context.Assign(linLayerBiasTensor, 0.0.AsScalar<T>());
+                        Type.InitBias(context, layer, linLayerId, linLayerBiasTensor);
                     }
                 }
             }

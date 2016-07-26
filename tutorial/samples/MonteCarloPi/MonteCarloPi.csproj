@@ -7,7 +7,7 @@
     <ProjectGuid>{5F2ECB6E-7F39-4889-99C2-BBE6144CF7AC}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>MonteCarloPi</RootNamespace>
+    <RootNamespace>Tutorial.Samples</RootNamespace>
     <AssemblyName>MonteCarloPi</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
