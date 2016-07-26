@@ -18,6 +18,7 @@ let tags =
         ConvolutionalNeuralNets,    "Convolutional Neural Nets" 
         RecurrentNeuralNets,        "Recurrent Neural Nets"
         ComputerVision,             "Computer Vision" 
+        LanguageModelling,          "Natural Language Modelling" 
         Image,                      "Image" 
         Video,                      "Video"
         Speech,                     "Speech"
@@ -51,5 +52,16 @@ let metaData =
             GitLink = gitLinkRoot + "MNIST"
             ImageLink = "images/mnist.png"
             Src = "samples" @@ "MNIST"
+        }
+
+        {   
+            Id = "0003"
+            Title = "PTB Natural Language Modelling"
+            Language = CSharp
+            Tags = [ComputerVision; Regression; Classification; RecurrentNeuralNets]
+            SourceCodeLink = sourceCodeLinkCsharp "PTB"
+            GitLink = gitLinkRoot + "PTB"
+            ImageLink = "images/mnist.png"
+            Src = "samples" @@ "PTB"
         }
     ]

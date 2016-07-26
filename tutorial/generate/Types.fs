@@ -15,6 +15,7 @@ type Tag =
 | ConvolutionalNeuralNets
 | RecurrentNeuralNets 
 | ComputerVision 
+| LanguageModelling
 | Image 
 | Video 
 | Speech 
