@@ -25,7 +25,7 @@ namespace AleaTK.ExprImpl
             }
             else
             {
-                throw new InvalidOperationException("Dot shape is wrong.");
+                throw new InvalidOperationException($"Dot shape is wrong: {A.Shape} dot {B.Shape}");
             }
         }
 
@@ -46,6 +46,8 @@ namespace AleaTK.ExprImpl
             // TODO: this is just temp code, need replace it by cuBLAS
             assignment.RequireOutputLValue(A);
             assignment.RequireOutputLValue(B);
+            assignment.RequireLayoutFullyUnitStride(A);
+            assignment.RequireLayoutFullyUnitStride(B);
             base.Prepare(assignment);
         }
 

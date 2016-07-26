@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Policy;
 using Alea;
 using Alea.cuDNN;
 
@@ -108,6 +109,83 @@ namespace AleaTK
             return (num + den - 1) / den;
         }
         #endregion
+    }
+
+    public abstract class Distribution
+    {
+    }
+
+    public sealed class UniformDistribution : Distribution
+    {
+    }
+
+    public sealed class NormalDistribution : Distribution
+    {
+        public readonly double Mean;
+        public readonly double Stddev;
+
+        public NormalDistribution()
+        {
+            Mean = 0.0;
+            Stddev = 1.0;
+        }
+
+        public NormalDistribution(double mean, double stddev)
+        {
+            Mean = mean;
+            Stddev = stddev;
+        }
+    }
+
+    public enum PseudoRandomType
+    {
+        Default = 0
+    }
+
+    public struct Range
+    {
+        public readonly long Begin;
+        public readonly long End;
+        public readonly long Step;
+
+        private Range(long begin, long end, long step)
+        {
+            Begin = begin;
+            End = end;
+            Step = step;
+        }
+
+        //public static implicit operator Range(int idx)
+        //{
+        //    if (idx >= 0)
+        //    {
+        //        return Range.Create(idx);
+        //    }
+
+        //    return All;
+        //}
+
+        public static implicit operator Range(long idx)
+        {
+            if (idx >= 0)
+            {
+                return Range.Create(idx);
+            }
+
+            return All;
+        }
+
+        public static Range All = new Range(0, -1, 1);
+
+        public static Range Create(long idx)
+        {
+            return new Range(idx, idx + 1, 1);
+        }
+
+        public static Range Create(long begin, long end)
+        {
+            return new Range(begin, end, 1);
+        }
     }
 
     public abstract class Disposable : IDisposable

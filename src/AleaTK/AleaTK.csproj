@@ -69,6 +69,7 @@
     <Compile Include="ML\Operator\Add.cs" />
     <Compile Include="ML\Operator\Convolution.cs" />
     <Compile Include="ML\Operator\Dot.cs" />
+    <Compile Include="ML\Operator\Dropout.cs" />
     <Compile Include="ML\Operator\Embedding.cs" />
     <Compile Include="ML\Operator\FullyConnected.cs" />
     <Compile Include="ML\Operator\L2Loss.cs" />

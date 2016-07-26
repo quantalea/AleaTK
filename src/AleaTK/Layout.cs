@@ -459,8 +459,8 @@ namespace AleaTK
 
             if (Rank == 2)
             {
-                const long maxCols = 5;
-                const long maxRows = 5;
+                const long maxCols = 10;
+                const long maxRows = 10;
                 var rows = Shape[0];
                 var cols = Shape[1];
                 var rowStride = Strides[0];

@@ -146,6 +146,24 @@ namespace AleaTK
                 OpCodes.ReduceMax, typeof(float));
             #endregion
 
+            ExprRegistry.Register<float>(
+                (exprParam, inputExprs) =>
+                {
+                    uint threshold = exprParam.Threshold;
+                    double scale = exprParam.Scale;
+                    return Map(inputExprs[0].CastExpr<float>(), inputExprs[1].CastExpr<uint>(),
+                        (invalue, mask) => (float)(mask > threshold ? invalue * scale : 0.0f), OpCodes.Dropout);
+                }, OpCodes.Dropout, typeof(float), typeof(uint));
+
+            ExprRegistry.Register<double>(
+                (exprParam, inputExprs) =>
+                {
+                    uint threshold = exprParam.Threshold;
+                    double scale = exprParam.Scale;
+                    return Map(inputExprs[0].CastExpr<double>(), inputExprs[1].CastExpr<uint>(),
+                        (invalue, mask) => (double)(mask > threshold ? invalue * scale : 0.0), OpCodes.Dropout);
+                }, OpCodes.Dropout, typeof(double), typeof(uint));
+
             ExprRegistry.Register<double>(
                 (exprParam, inputExprs) =>
                     Map(inputExprs[0].CastExpr<double>(), x => x > 0.0 ? 1.0 : 0.0, OpCodes.ReLUGrad),
@@ -174,6 +192,11 @@ namespace AleaTK
                         exprParam.SourceRows, 0.0f, add);
                 },
                 OpCodes.TakeGrad, typeof(int), typeof(float));
+        }
+
+        public static Range Range(int beginInclusive, int endExclusive)
+        {
+            return AleaTK.Range.Create(beginInclusive, endExclusive);
         }
 
         #region Tensor creation (allocate or reference)
@@ -217,9 +240,19 @@ namespace AleaTK
             return Reference<T>(array);
         }
 
+        public static Tensor<T> AsTensor<T>(this T[,] array, Shape shape)
+        {
+            return Reference<T>(array, shape);
+        }
+
         public static Tensor<T> AsTensor<T>(this T[,,] array)
         {
             return Reference<T>(array);
+        }
+
+        public static Tensor<T> AsTensor<T>(this T[,,] array, Shape shape)
+        {
+            return Reference<T>(array, shape);
         }
         #endregion
 
@@ -377,6 +410,31 @@ namespace AleaTK
         public static T[] ToArray<T>(this Tensor<T> tensor)
         {
             return Context.CpuContext.ToArray(tensor);
+        }
+
+        public static T[,,] ToArray3D<T>(this Context context, Tensor<T> tensor)
+        {
+            Util.EnsureTrue(tensor.Layout.Rank >= 3);
+
+            if (!tensor.Layout.IsInnerChangeMostFullyPacked)
+            {
+                var tempTensor = context.Device.Allocate<T>(tensor.Layout, tensor.Buffer.Memory.Length);
+                context.Copy(tempTensor, tensor).Wait();
+                tensor = tempTensor;
+            }
+
+            var l0 = tensor.Layout.Shape[0];
+            var l1 = tensor.Layout.Shape[1];
+            var l2 = tensor.Layout.Shape.Skip(2).Aggregate(ScalarOps.Mul);
+            var array = new T[l0, l1, l2];
+            var cpuTensor = array.AsTensor();
+            context.Copy(cpuTensor, tensor).Wait();
+            return array;
+        }
+
+        public static T[,,] ToArray3D<T>(this Tensor<T> tensor)
+        {
+            return Context.CpuContext.ToArray3D(tensor);
         }
 
         public static T[,] ToArray2D<T>(this Context context, Tensor<T> tensor)
@@ -547,18 +605,18 @@ namespace AleaTK
             return ReduceSum(a, reductionIndices) / (a.Shape.Length.AsScalar<T>());
         }
 
-        public static Expr<T> RandomUniform<T>(ulong? seed = null, ulong? offset = null, PseudoRandomType type = PseudoRandomType.Default)
+        public static Expr<T> RandomUniform<T>(Shape shape = null, ulong? seed = null, ulong offset = 0UL,
+            PseudoRandomType type = PseudoRandomType.Default)
         {
             seed = seed ?? ((ulong) DateTime.Now.Ticks);
-            offset = offset ?? 0UL;
-            return new PseudoRandomExpr<T>(type, RandomDistribution.Uniform, seed.Value, offset.Value);
+            return new PseudoRandomExpr<T>(shape, type, new UniformDistribution(), seed.Value, offset);
         }
 
-        public static Expr<T> RandomUniform<T>(Shape shape, ulong? seed = null, ulong? offset = null, PseudoRandomType type = PseudoRandomType.Default)
+        public static Expr<T> RandomNormal<T>(Shape shape = null, ulong? seed = null, ulong offset = 0UL,
+            double mean = 0.0, double stddev = 1.0, PseudoRandomType type = PseudoRandomType.Default)
         {
             seed = seed ?? ((ulong)DateTime.Now.Ticks);
-            offset = offset ?? 0UL;
-            return new PseudoRandomExpr<T>(shape, type, RandomDistribution.Uniform, seed.Value, offset.Value);
+            return new PseudoRandomExpr<T>(shape, type, new NormalDistribution(mean, stddev), seed.Value, offset);
         }
 
         public static Expr<T> Dot<T>(Expr<T> a, Expr<T> b)
@@ -574,6 +632,12 @@ namespace AleaTK
         public static Expr<T> TakeGrad<T>(Expr<int> indices, Expr<T> outputGrad, int sourceRows)
         {
             return ExprRegistry.Create<T>(OpCodes.TakeGrad, new {SourceRows = sourceRows}, indices, outputGrad);
+        }
+
+        public static Expr<T> Dropout<T>(Expr<T> invalue, Expr<uint> mask, uint threshold, double scale)
+        {
+            return ExprRegistry.Create<T>(OpCodes.Dropout, new {Threshold = threshold, Scale = scale}, invalue,
+                mask);
         }
         #endregion
     }

@@ -5,6 +5,7 @@ using AleaTK;
 using NUnit.Framework;
 using Context = AleaTK.Context;
 using static AleaTK.Library;
+using static AleaTKUtil.Common;
 using static AleaTKTest.Common;
 
 namespace AleaTKTest
@@ -552,7 +553,7 @@ namespace AleaTKTest
                 Console.WriteLine($"Batch {i}");
                 // generates random numbers, apply the mapping followed by a mean reduction
                 var offset = batchSize * (ulong)i;
-                ctx.Assign(points, RandomUniform<double2>(seed, offset));
+                ctx.Assign(points, RandomUniform<double2>(seed: seed, offset: offset));
                 ctx.Assign(pi, i == 0 ? ReduceMean(pis) : (pi + ReduceMean(pis)) / 2.0);
             }
 
@@ -1124,6 +1125,182 @@ namespace AleaTKTest
             };
 
             Assert.AreEqual(expected, _embedgrad.ToArray2D());
+        }
+
+        [Test]
+        public static void Slice1DCpu()
+        {
+            var ctx = gpu;
+            var input = ctx.Allocate(new[] { 1.0, 2.0, 3.0, 4.0, 5.0 });
+            ctx.Assign(input.Slice(), input.Slice() + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 3.0, 4.0, 5.0, 6.0 }, input.ToArray());
+
+            ctx.Assign(input.Slice(1), input.Slice(1) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 4.0, 4.0, 5.0, 6.0 }, input.ToArray());
+
+            ctx.Assign(input.Slice(Range(1, 4)), input.Slice(Range(1, 4)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 5.0, 5.0, 6.0, 6.0 }, input.ToArray());
+        }
+
+        [Test]
+        public static void Slice1DGpu()
+        {
+            var ctx = gpu;
+            var input = ctx.Allocate(new[] { 1.0, 2.0, 3.0, 4.0, 5.0 });
+            ctx.Assign(input.Slice(), input.Slice() + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 3.0, 4.0, 5.0, 6.0 }, input.ToArray());
+
+            ctx.Assign(input.Slice(1), input.Slice(1) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 4.0, 4.0, 5.0, 6.0 }, input.ToArray());
+
+            ctx.Assign(input.Slice(Range(1, 4)), input.Slice(Range(1, 4)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[] { 2.0, 5.0, 5.0, 6.0, 6.0 }, input.ToArray());
+        }
+
+        [Test]
+        public static void Slice2DCpu()
+        {
+            var ctx = cpu;
+            var input = ctx.Allocate(new[,] { { 1.0, 2.0, 3.0 }, { 4.0, 5.0, 6.0 } });
+
+            ctx.Assign(input.Slice(), input.Slice() + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 2.0, 3.0, 4.0 }, { 5.0, 6.0, 7.0 } }, input.ToArray2D());
+
+            ctx.Assign(input.Slice(-1, Range(0, 2)), input.Slice(-1, Range(0, 2)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 3.0, 4.0, 4.0 }, { 6.0, 7.0, 7.0 } }, input.ToArray2D());
+
+            ctx.Assign(input.Slice(1, Range(0, 2)), input.Slice(1, Range(0, 2)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 3.0, 4.0, 4.0 }, { 7.0, 8.0, 7.0 } }, input.ToArray2D());
+        }
+
+        [Test]
+        public static void Slice2DGpu()
+        {
+            var ctx = gpu;
+            var input = ctx.Allocate(new[,] { { 1.0, 2.0, 3.0 }, { 4.0, 5.0, 6.0 } });
+
+            ctx.Assign(input.Slice(), input.Slice() + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 2.0, 3.0, 4.0 }, { 5.0, 6.0, 7.0 } }, input.ToArray2D());
+
+            ctx.Assign(input.Slice(-1, Range(0, 2)), input.Slice(-1, Range(0, 2)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 3.0, 4.0, 4.0 }, { 6.0, 7.0, 7.0 } }, input.ToArray2D());
+
+            ctx.Assign(input.Slice(1, Range(0, 2)), input.Slice(1, Range(0, 2)) + 1.0);
+            input.Print();
+            Assert.AreEqual(new[,] { { 3.0, 4.0, 4.0 }, { 7.0, 8.0, 7.0 } }, input.ToArray2D());
+        }
+
+        [Test]
+        public static void Slice3DCpu()
+        {
+            var ctx = cpu;
+            var input = ctx.Allocate(new[, ,] { { { 1.0, 2.0, 3.0 }, { 4.0, 5.0, 6.0 } }, { { 1.5, 2.5, 3.5 }, { 4.5, 5.5, 6.5 } } });
+
+            ctx.Assign(input.Slice(), input.Slice() + 1.0);
+            Assert.AreEqual(new[, ,] { { { 2.0, 3.0, 4.0 }, { 5.0, 6.0, 7.0 } }, { { 2.5, 3.5, 4.5 }, { 5.5, 6.5, 7.5 } } }, input.ToArray3D());
+
+            ctx.Assign(input.Slice(-1, -1, Range(0, 2)), input.Slice(-1, -1, Range(0, 2)) + 1.0);
+            Assert.AreEqual(new[, ,] { { { 3.0, 4.0, 4.0 }, { 6.0, 7.0, 7.0 } }, { { 3.5, 4.5, 4.5 }, { 6.5, 7.5, 7.5 } } }, input.ToArray3D());
+
+            ctx.Assign(input.Slice(1, -1, Range(0, 2)), input.Slice(1, -1, Range(0, 2)) + 1.0);
+            Assert.AreEqual(new[, ,]
+            {
+                {
+                    { 3.0, 4.0, 4.0 },
+                    { 6.0, 7.0, 7.0 }
+                },
+                {
+                    { 4.5, 5.5, 4.5 },
+                    { 7.5, 8.5, 7.5 }
+                }
+            }, input.ToArray3D());
+        }
+
+        [Test]
+        public static void Slice3DGpu()
+        {
+            var ctx = gpu;
+            var input = ctx.Allocate(new[, ,] { { { 1.0, 2.0, 3.0 }, { 4.0, 5.0, 6.0 } }, { { 1.5, 2.5, 3.5 }, { 4.5, 5.5, 6.5 } } });
+
+            ctx.Assign(input.Slice(), input.Slice() + 1.0);
+            Assert.AreEqual(new[, ,] { { { 2.0, 3.0, 4.0 }, { 5.0, 6.0, 7.0 } }, { { 2.5, 3.5, 4.5 }, { 5.5, 6.5, 7.5 } } }, input.ToArray3D());
+
+            ctx.Assign(input.Slice(-1, -1, Range(0, 2)), input.Slice(-1, -1, Range(0, 2)) + 1.0);
+            Assert.AreEqual(new[, ,] { { { 3.0, 4.0, 4.0 }, { 6.0, 7.0, 7.0 } }, { { 3.5, 4.5, 4.5 }, { 6.5, 7.5, 7.5 } } }, input.ToArray3D());
+
+            ctx.Assign(input.Slice(1, -1, Range(0, 2)), input.Slice(1, -1, Range(0, 2)) + 1.0);
+            Assert.AreEqual(new[, ,]
+            {
+                {
+                    { 3.0, 4.0, 4.0 },
+                    { 6.0, 7.0, 7.0 }
+                },
+                {
+                    { 4.5, 5.5, 4.5 },
+                    { 7.5, 8.5, 7.5 }
+                }
+            }, input.ToArray3D());
+        }
+
+        [Test]
+        public static void RandomNormalCpu()
+        {
+            var ctx = cpu;
+
+            //var data = ctx.Eval(RandomNormal<double>(Shape.Create(100, 100), seed: 0UL));
+            //data.Print();
+
+            //var mean = ctx.Eval(ReduceMean(data));
+            //mean.Print();
+
+            //Assert.That(mean.ToScalar(), Is.EqualTo(0.0).Within(1e-2));
+        }
+
+        [Test]
+        public static void RandomNormalGpu()
+        {
+            var ctx = gpu;
+
+            var data = ctx.Eval(RandomNormal<double>(Shape.Create(100, 100), seed: 0UL));
+            data.Print();
+
+            var mean = ctx.Eval(ReduceMean(data));
+            mean.Print();
+
+            Assert.That(mean.ToScalar(), Is.EqualTo(0.0).Within(1e-2));
+        }
+
+        [Test]
+        public static void DropoutForwardGpu()
+        {
+            var ctx = gpu;
+
+            var data = ctx.Allocate(new[] {1.0f, 2.0f, 3.0f, 4.0f});
+            var mask = ctx.Allocate(new[] {6U, 3U, 9U, 2U});
+            var threshold = 5U;
+            var scale = 2.0;
+            var result = ctx.Eval(Dropout(data, mask, threshold, scale));
+            result.Print();
+        }
+
+        [Test]
+        public static void RandomUniformGpu()
+        {
+            var ctx = gpu;
+
+            var data = ctx.Eval((2.0f.AsScalar() * RandomUniform<float>(Shape.Create(10, 10)) - 1.0f.AsScalar()) * 5.0f.AsScalar());
+            data.Print();
         }
     }
 }

@@ -7,7 +7,7 @@
     <ProjectGuid>{EC890853-7BCF-4C35-A714-FFB81776E433}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>PTB</RootNamespace>
+    <RootNamespace>Tutorial.Samples</RootNamespace>
     <AssemblyName>PTB</AssemblyName>
     <TargetFrameworkVersion>v4.5.2</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
@@ -23,6 +23,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
+    <NoWarn>162</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -33,6 +34,7 @@
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
     <Prefer32Bit>false</Prefer32Bit>
+    <NoWarn>162</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
@@ -50,6 +52,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+    <None Include="Extended.md" />
+    <None Include="lstm_batched.py" />
+    <None Include="lstm_small.mat">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Readme.md" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
@@ -60,6 +68,10 @@
   </Target>
   -->
   <ItemGroup>
+    <ProjectReference Include="..\..\..\src\AleaTKUtil\AleaTKUtil.csproj">
+      <Project>{19810d0a-bd63-4360-aca3-1db47c91e0a3}</Project>
+      <Name>AleaTKUtil</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\..\src\AleaTK\AleaTK.csproj">
       <Project>{ec47c435-0d7d-4819-be05-11b9e57fb8f3}</Project>
       <Name>AleaTK</Name>
@@ -70,6 +82,37 @@
       <ItemGroup>
         <Reference Include="Alea">
           <HintPath>..\..\..\packages\Alea\lib\net40\Alea.dll</HintPath>
+          <Private>True</Private>
+          <Paket>True</Paket>
+        </Reference>
+      </ItemGroup>
+    </When>
+  </Choose>
+  <Choose>
+    <When Condition="$(TargetFrameworkIdentifier) == '.NETFramework' And ($(TargetFrameworkVersion) == 'v4.0' Or $(TargetFrameworkVersion) == 'v4.5' Or $(TargetFrameworkVersion) == 'v4.5.1' Or $(TargetFrameworkVersion) == 'v4.5.2' Or $(TargetFrameworkVersion) == 'v4.5.3' Or $(TargetFrameworkVersion) == 'v4.6' Or $(TargetFrameworkVersion) == 'v4.6.1')">
+      <ItemGroup>
+        <Reference Include="Alea.Parallel">
+          <HintPath>..\..\..\packages\Alea.Parallel\lib\net40\Alea.Parallel.dll</HintPath>
+          <Private>True</Private>
+          <Paket>True</Paket>
+        </Reference>
+      </ItemGroup>
+    </When>
+  </Choose>
+  <Choose>
+    <When Condition="$(TargetFrameworkIdentifier) == '.NETFramework' And ($(TargetFrameworkVersion) == 'v4.0')">
+      <ItemGroup>
+        <Reference Include="CSMatIO">
+          <HintPath>..\..\..\packages\CSMatIO\lib\net40\CSMatIO.dll</HintPath>
+          <Private>True</Private>
+          <Paket>True</Paket>
+        </Reference>
+      </ItemGroup>
+    </When>
+    <When Condition="$(TargetFrameworkIdentifier) == '.NETFramework' And ($(TargetFrameworkVersion) == 'v4.5' Or $(TargetFrameworkVersion) == 'v4.5.1' Or $(TargetFrameworkVersion) == 'v4.5.2' Or $(TargetFrameworkVersion) == 'v4.5.3' Or $(TargetFrameworkVersion) == 'v4.6' Or $(TargetFrameworkVersion) == 'v4.6.1')">
+      <ItemGroup>
+        <Reference Include="CSMatIO">
+          <HintPath>..\..\..\packages\CSMatIO\lib\net45\CSMatIO.dll</HintPath>
           <Private>True</Private>
           <Paket>True</Paket>
         </Reference>
@@ -121,5 +164,12 @@
       </ItemGroup>
     </When>
   </Choose>
+  <ItemGroup>
+    <Reference Include="zlib.net">
+      <HintPath>..\..\..\packages\zlib.net\lib\zlib.net.dll</HintPath>
+      <Private>True</Private>
+      <Paket>True</Paket>
+    </Reference>
+  </ItemGroup>
   <Import Project="..\..\..\packages\Alea\build\Alea.targets" Condition="Exists('..\..\..\packages\Alea\build\Alea.targets')" Label="Paket" />
 </Project>

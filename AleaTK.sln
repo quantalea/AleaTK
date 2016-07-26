@@ -68,6 +68,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "content", "content", "{1F81
 		tutorial\design\content\style.css = tutorial\design\content\style.css
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AleaTKUtil", "src\AleaTKUtil\AleaTKUtil.csproj", "{19810D0A-BD63-4360-ACA3-1DB47C91E0A3}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -98,6 +100,10 @@ Global
 		{EC890853-7BCF-4C35-A714-FFB81776E433}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EC890853-7BCF-4C35-A714-FFB81776E433}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EC890853-7BCF-4C35-A714-FFB81776E433}.Release|Any CPU.Build.0 = Release|Any CPU
+		{19810D0A-BD63-4360-ACA3-1DB47C91E0A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19810D0A-BD63-4360-ACA3-1DB47C91E0A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19810D0A-BD63-4360-ACA3-1DB47C91E0A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19810D0A-BD63-4360-ACA3-1DB47C91E0A3}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -115,5 +121,6 @@ Global
 		{FE83A1AB-B7B2-415D-A35E-4004B51F1B84} = {975ADAFF-65C8-4CB0-BA59-218433C3E89C}
 		{AB884DFA-416F-43BE-869D-9418FF2A0143} = {FE83A1AB-B7B2-415D-A35E-4004B51F1B84}
 		{1F815270-04BC-4140-81F6-A014560BA0EA} = {FE83A1AB-B7B2-415D-A35E-4004B51F1B84}
+		{19810D0A-BD63-4360-ACA3-1DB47C91E0A3} = {98935CC7-9E54-4EE6-9DBF-8F7B8F180D8A}
 	EndGlobalSection
 EndGlobal

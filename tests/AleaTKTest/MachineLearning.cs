@@ -1,18 +1,14 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Runtime.Remoting.Messaging;
-using System.Text;
-using System.Threading.Tasks;
 using AleaTK;
 using AleaTK.ML;
 using AleaTK.ML.Operator;
+using csmatio.io;
+using csmatio.types;
 using NUnit.Framework;
 using static AleaTK.Library;
 using static AleaTK.ML.Library;
-using static AleaTKTest.Common;
+using static AleaTKUtil.Common;
 
 namespace AleaTKTest
 {
@@ -58,31 +54,6 @@ namespace AleaTKTest
                     Console.WriteLine($"loss = {opt.GetTensor(loss).ToScalar()}");
                 }
             }
-        }
-
-        [Test]
-        public static void TestRNN()
-        {
-            const int miniBatch = 64;
-            const int seqLength = 20;
-            const int numLayers = 2;
-            const int hiddenSize = 512;
-            const int inputSize = hiddenSize;
-
-            var x = Variable<float>(PartialShape.Create(miniBatch, seqLength, inputSize));
-            //var x = Variable<float>(PartialShape.Create(miniBatch, inputSize, seqLength));
-            var rnn = new RNN<float>(x, numLayers, hiddenSize);
-
-            var ctx = Context.GpuContext(0);
-            var opt = new GradientDescentOptimizer(ctx, rnn.Y, 0.001);
-            opt.Initalize();
-
-            opt.AssignTensor(x, Fill(Shape.Create(miniBatch, seqLength, inputSize), 1.0f));
-            //opt.AssignTensor(x, Fill(Shape.Create(miniBatch, inputSize, seqLength), 1.0f));
-
-            opt.Forward();
-            opt.Backward();
-            ctx.ToGpuContext().Stream.Synchronize();
         }
     }
 }

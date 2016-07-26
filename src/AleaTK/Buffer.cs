@@ -158,7 +158,20 @@ namespace AleaTK
                 var stride0 = Layout.Strides[0];
                 var stride1 = Layout.Strides[1];
                 var rawWriter = RawWriter;
-                return (i0, i1, value) => rawWriter(i0*stride0 + i1*stride1, value);
+                return (i0, i1, value) => rawWriter(i0 * stride0 + i1 * stride1, value);
+            }
+        }
+
+        public Action<long, long, long, T> Writer3
+        {
+            get
+            {
+                Util.EnsureTrue(Layout.Rank == 3);
+                var stride0 = Layout.Strides[0];
+                var stride1 = Layout.Strides[1];
+                var stride2 = Layout.Strides[2];
+                var rawWriter = RawWriter;
+                return (i0, i1, i2, value) => rawWriter(i0 * stride0 + i1 * stride1 + i2 * stride2, value);
             }
         }
 
@@ -252,31 +265,38 @@ namespace AleaTK
             var length0 = Shape[0];
             var length1 = Shape[1];
 
-            if (Reader2 == null)
-            {
-                var stride0 = Layout.Strides[0];
-                var stride1 = Layout.Strides[1];
-                var rawReader = RawReader;
-
-                if (broadcastShape == null || broadcastShape.SequenceEqual(Layout.Shape))
-                {
-                    return (i0, i1) => rawReader(i0 * stride0 + i1 * stride1);
-                }
-
-                return (i0, i1) => rawReader((i0% length0) *stride0 + (i1% length1) *stride1);
-            }
-
-            var reader = Reader2;
+            var stride0 = Layout.Strides[0];
+            var stride1 = Layout.Strides[1];
+            var rawReader = RawReader;
 
             if (broadcastShape == null || broadcastShape.SequenceEqual(Layout.Shape))
             {
-                return reader;
+                return (i0, i1) => rawReader(i0 * stride0 + i1 * stride1);
             }
 
-            return (i0, i1) => reader(i0%length0, i1%length1);
+            return (i0, i1) => rawReader((i0% length0) *stride0 + (i1% length1) *stride1);
         }
 
-        public Func<long, long, T> Reader2 { private get; set; } 
+        public Func<long, long, long, T> GetReader3(Shape broadcastShape = null)
+        {
+            Util.EnsureTrue(Layout.Rank == 3);
+
+            var length0 = Shape[0];
+            var length1 = Shape[1];
+            var length2 = Shape[2];
+
+            var stride0 = Layout.Strides[0];
+            var stride1 = Layout.Strides[1];
+            var stride2 = Layout.Strides[2];
+            var rawReader = RawReader;
+
+            if (broadcastShape == null || broadcastShape.SequenceEqual(Layout.Shape))
+            {
+                return (i0, i1, i2) => rawReader(i0 * stride0 + i1 * stride1 + i2 * stride2);
+            }
+
+            return (i0, i1, i2) => rawReader((i0 % length0) * stride0 + (i1 % length1) * stride1 + (i2 % length2) * stride2);
+        }
     }
 
     public static class Buffer

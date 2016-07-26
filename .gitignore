@@ -227,3 +227,5 @@ output
 temp
 src/Alea/CryptoObfuscator_Output/Alea.*
 #*.obproj.map
+
+.idea/
