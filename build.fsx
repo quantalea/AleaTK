@@ -18,7 +18,7 @@ let versionType = Some "beta"
 let majorVersion = 0
 let minorVersion = 9
 let patchVersion = 0
-let buildVersion = 1
+let buildVersion = 2
 // End of version section
 
 let version = sprintf "%d.%d.%d.%d" majorVersion minorVersion patchVersion buildVersion
@@ -116,6 +116,8 @@ VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "__PROJECT_NAME__", "tutorial\samples\__PROJECT_NAME__\__PROJECT_NAME__.csproj", "__PROJECT_GUID__"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AleaTKUtil", "src\AleaTKUtil\AleaTKUtil.csproj", "{19810D0A-BD63-4360-ACA3-1DB47C91E0A3}"
+EndProject
 Global
     GlobalSection(SolutionConfigurationPlatforms) = preSolution
         Debug|Any CPU = Debug|Any CPU
@@ -126,6 +128,10 @@ Global
         __PROJECT_GUID__.Debug|Any CPU.Build.0 = Debug|Any CPU
         __PROJECT_GUID__.Release|Any CPU.ActiveCfg = Release|Any CPU
         __PROJECT_GUID__.Release|Any CPU.Build.0 = Release|Any CPU
+		{19810D0A-BD63-4360-ACA3-1DB47C91E0A3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{19810D0A-BD63-4360-ACA3-1DB47C91E0A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{19810D0A-BD63-4360-ACA3-1DB47C91E0A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{19810D0A-BD63-4360-ACA3-1DB47C91E0A3}.Release|Any CPU.Build.0 = Release|Any CPU
     EndGlobalSection    
     GlobalSection(SolutionProperties) = preSolution
         HideSolutionNode = FALSE
@@ -299,6 +305,11 @@ Target "Package" (fun _ ->
                 let tempRootFolder = "temp" @@ projectName |> Path.GetFullPath
                 let tempProjectFolder = tempRootFolder @@ (projectFolder.Substring(cwd.Length + 1))
                 let tempProjectFile = tempProjectFolder @@ (Path.GetFileName(projectFile))
+
+                // copy AleaTKUtil
+                CopyDir (tempRootFolder @@ "src" @@ "AleaTKUtil") ("src" @@ "AleaTKUtil") (fun file -> true)
+                DeleteDir (tempRootFolder @@ "src" @@ "AleaTKUtil" @@ "bin")
+                DeleteDir (tempRootFolder @@ "src" @@ "AleaTKUtil" @@ "obj")
         
                 // copy the project files, then delete the intermediate folders
                 CopyDir tempProjectFolder projectFolder (fun file -> true)
@@ -356,16 +367,14 @@ Target "Package" (fun _ ->
                     let guid = nodeProjectGuidList.Item(0).InnerText
                     let solutionFile = projectName + ".sln"
                     printfn "Writing solution file %s" solutionFile
-                    writeSolutionFile (tempRootFolder @@ solutionFile) projectName (sprintf "%A" guid)
+                    writeSolutionFile (tempRootFolder @@ solutionFile) projectName (sprintf "%s" guid)
                 else 
                     failwithf "could not read project GUID from %s" projectFile
 
                 for nodeProjectReferenceName in doc.SelectNodes("//x:ItemGroup/x:ProjectReference/x:Name", mgr) do
                     let name = nodeProjectReferenceName.InnerText
                     match name with
-                    | "Alea"
-                    | "Alea.Fody"
-                    | "Alea.Parallel" ->
+                    | "AleaTK" ->
                         printfn "Removing ProjectReference %A" name
                         let nodeProjectReference = nodeProjectReferenceName.ParentNode
                         let nodeItemGroup = nodeProjectReference.ParentNode
