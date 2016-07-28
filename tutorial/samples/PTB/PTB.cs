@@ -1224,6 +1224,14 @@ namespace Tutorial.Samples
                 TestData = ReadWords(TestPath).Select(WordToId).ToArray();
             }
 
+            public List<string> Words(int from, int to)
+            {
+                var words = new List<string>();
+                for (var i = from; i < to; ++i)
+                    words.Add(IdToWordDict[TrainData[i]]);
+                return words;
+            }
+
             public class Batch
             {
                 public int[,] Inputs { get; set; }
@@ -1507,6 +1515,19 @@ namespace Tutorial.Samples
             Run(false, CfgType, true);
         }
 
+        [Test]
+        public static void PrintWords()
+        {
+            var ptb = new Data(DataPath);
+            var words = ptb.Words(10000, 20000);
+            foreach (var w in words)
+            {
+                Console.Write($"{w} ");
+                if (w == "<eos>")
+                    Console.WriteLine();
+            }
+        }
+
         public static void Run(bool isConsole, ConfigType cfgType, bool usingCUDNN)
         {
             Console.WriteLine($"UsingCUDNN({usingCUDNN}), Config: {cfgType}");
@@ -1635,6 +1656,9 @@ namespace Tutorial.Samples
 
         private static void Main()
         {
+            PrintWords();
+            return;
+
             if (Profiling)
             {
                 Run(false, CfgType, false);

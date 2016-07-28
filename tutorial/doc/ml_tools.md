@@ -43,7 +43,7 @@ $$ {#eq:stable-softmax}
 The cross entropy quantifies the difference of two probability distributions over the same random variable. For discrete probability distributions it is defined as
 
 $$
-	\mathrm{D}(p \parallel q) = - \sum_k p_k \log(q_k).
+	\mathrm{D}(p \| q) = - \sum_k p_k \log(q_k).
 $$ {#eq:cross-entropy}
 
 The input to a softmax with cross entropy layer are
@@ -65,7 +65,7 @@ A fully connected layer connects all neurons from the previous layer with every 
 
 $$
 	E_{mu} = \sum_{v=1}^l D_{mv} W_{uv} + b_u,
-$$ {#eq:convolution1}
+$$ {#eq:fully-connected}
 
 where $W_{uv}$ are the weights and $b_u$ the bias vector. If the input tensor $D_{mv}$ has rank greater than 2, the dimensions 2 and higher are flattened. 
 
@@ -115,7 +115,7 @@ with $W_{n, d} : \mathbb{R}^n \rightarrow \mathbb{R}^d$ an affine map. Usually $
 
 #### LSTM
 
-The LSTM has a dynamics that allow it to keep information for an extended number of time steps. There are different LSTM architectures that differ in their connectivity structure and activation functions. All LSTM architectures have explicit memory cells  $c_t \in \mathbb{R}^d$ for storing information for long periods of time and can decide to overwrite, retrieve, or keep the memory cell for the next time step. An LSTM cell transforms an input $x_t \in \mathbb{R}^d$ and a hidden state $h_{t-1}$, keeping a cell state $c_t \in \mathbb{R}^d$ as follows: 
+The LSTM has a dynamics that allow it to keep information for an extended number of time steps. There are different LSTM architectures that differ in their connectivity structure and activation functions. All LSTM architectures have explicit memory cells  $c_t \in \mathbb{R}^d$ for storing information for long periods of time and can decide to overwrite, retrieve, or keep the memory cell for the next time step. An LSTM cell transforms an input $x_t \in \mathbb{R}^n$ and a hidden state $h_{t-1} \in \mathbb{R}^d$, keeping a cell state $c_t \in \mathbb{R}^d$ as follows: 
 
 $$
 \begin{align}
@@ -135,7 +135,7 @@ $$
 			\sigma \\
 			\zeta_1 
 		\end{array}			
-	\right) T_{n+d, 4n} 
+	\right) T_{n+d, 4d} 
 	\left(
 		\begin{array}{c}
 			x_t \\
@@ -147,7 +147,7 @@ $$
 \end{align} 
 $$ {#eq:lstm1}
 
-with $T_{n+d, 4n} : \mathbb{R}^{n+d} \rightarrow \mathbb{R}^{4d}$ an affine map. Usually $\zeta_i = \tanh$. The vector $i$ is called the input gate, $f$ the forget gate, $o$ the output gate and $g$ the input modulation gate.
+with $T_{n+d, 4d} : \mathbb{R}^{n+d} \rightarrow \mathbb{R}^{4d}$ an affine map. Usually $\zeta_i = \tanh$. The vector $i$ is called the input gate, $f$ the forget gate, $o$ the output gate and $g$ the input modulation gate.
 
 Often multiple LSTM layers are stacked. In this case $d = n$ excpet for the first layer, where the input dimension $n$ can be different from the hidden dimension $d$.
 
@@ -171,7 +171,7 @@ $$
 			\sigma \\
 			\zeta_1 
 		\end{array}			
-	\right) T_{2n, 4n} 
+	\right) T_{2d, 4d} 
 	\left(
 		\begin{array}{c}
 			D(h^{l-1}_t) \\
