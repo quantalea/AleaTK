@@ -1,5 +1,5 @@
 """
-This is a batched LSTM forward and backward pass
+Batched LSTM forward and backward pass from https://gist.github.com/karpathy/587454dc0146a6ae21fc slightly modified 
 """
 import numpy as np
 import scipy as sp
@@ -134,13 +134,11 @@ class LSTM:
 
     return dX, dWLSTM, dc0, dh0
 
-
-
 # -------------------
 # TEST CASES
 # -------------------
 
-def forcsharp():
+def saveToMatFile():
     np.random.seed(0)
     n,b,d = (3,2,4)
     input_size = 5
@@ -173,16 +171,6 @@ def forcsharp():
                     "dh0": dh0.transpose()
                 })
 
-def printCsharp(txt, a):
-  print(txt, end="")
-  print("/*[shape ", a.shape, "]*/", end="")
-  af = a.flatten()
-  print("{", end="")
-  for i in range(0, af.size-1):
-    print("%.14f, " % (af[i]), end="")
-  print("%.14f" % (af[af.size-1]), end="")
-  print("};")
-
 def checkSequentialMatchesBatch():
   """ check LSTM I/O forward/backward interactions """
 
@@ -192,17 +180,8 @@ def checkSequentialMatchesBatch():
   WLSTM = LSTM.init(input_size, d) # input size, hidden size
   X = np.random.randn(n,b,input_size)
 
-  printCsharp("X = ", X)
-  printCsharp("WLSTM = ", WLSTM)
-
-  #h0 = np.random.randn(b,d)
-  #c0 = np.random.randn(b,d)
-
   h0 = np.zeros((b,d))
   c0 = np.zeros((b,d))
-
-  printCsharp("h0 = ", h0)
-  printCsharp("c0 = ", c0)
 
   # sequential forward
   cprev = c0
@@ -219,24 +198,13 @@ def checkSequentialMatchesBatch():
   H, _, _, batch_cache = LSTM.forward(X, WLSTM, c0, h0)
   assert np.allclose(H, Hcat), 'Sequential and Batch forward don''t match!'
 
-  printCsharp("H = ", H)
-
   # eval loss
   wrand = np.random.randn(*Hcat.shape)
   loss = np.sum(Hcat * wrand)
   dH = wrand
 
-  printCsharp("dH = ", dH)
-
   # get the batched version gradients
   BdX, BdWLSTM, Bdc0, Bdh0 = LSTM.backward(dH, batch_cache)
-
-  printCsharp("BdX = ", BdX)
-  printCsharp("BdWLSTM = ", BdWLSTM)
-  printCsharp("Bdc0 = ", Bdc0)
-  printCsharp("Bdh0 = ", Bdh0)
-
-  spi.savemat("lstm_small.mat", {"SeqLength" : n, "BatchSize" : b, "InputSize" : input_size, "HiddenSize" : d, "X" : X.transpose(), "WLSTM" : WLSTM.transpose(), "h0" : h0, "c0" : c0, "H" : H.transpose(), "dH" : dH, "BdX" : BdX, "BdWLSTM" : BdWLSTM, "Bdc0" : Bdc0, "Bdh0" : Bdh0})
 
   # now perform sequential backward
   dX = np.zeros_like(X)
@@ -263,7 +231,6 @@ def checkSequentialMatchesBatch():
   print(np.allclose(BdWLSTM, dWLSTM))
   print(np.allclose(Bdc0, dc0))
   print(np.allclose(Bdh0, dh0))
-
 
 def checkBatchGradient():
   """ check that the batch gradient is correct """
@@ -326,11 +293,10 @@ def checkBatchGradient():
       print("%s checking param %s index %s (val = %+8f), analytic = %+8f, numerical = %+8f, relative error = %+8f" \
             % (status, name, np.unravel_index(i, mat.shape), old_val, grad_analytic, grad_numerical, rel_error))
 
-
 if __name__ == "__main__":
-    forcsharp()
+    saveToMatFile()
 
-  #checkSequentialMatchesBatch()
-  #input("check OK, press key to continue to gradient check")
-  #checkBatchGradient()
-  #print("every line should start with OK. Have a nice day!")
+    #checkSequentialMatchesBatch()
+    #input("check OK, press key to continue to gradient check")
+    #checkBatchGradient()
+    #print("every line should start with OK. Have a nice day!")

@@ -8,7 +8,7 @@ using static AleaTK.ML.Library;
 
 namespace AleaTK.ML.Operator
 {
-    public abstract class RNNType
+    public abstract class RnnType
     {
         public abstract RNNMode Mode { get; }
 
@@ -17,9 +17,9 @@ namespace AleaTK.ML.Operator
         public abstract void InitBias<T>(Context ctx, int layerId, int linLayerId, Tensor<T> tensor);
     }
 
-    public sealed class LSTMRNNType : RNNType
+    public sealed class LstmRnnType : RnnType
     {
-        public LSTMRNNType(double forgetBiasInit = 0.0)
+        public LstmRnnType(double forgetBiasInit = 0.0)
         {
             ForgetBiasInit = forgetBiasInit;
         }
@@ -45,9 +45,15 @@ namespace AleaTK.ML.Operator
         }
     }
 
-    public class RNN<T> : Differentiable
+    /// <summary>
+    /// Recurrent neural network, possibly multiple layers stacked on each other, accelerated with cuDNN.
+    /// Note that cuDNN adds dropout only between the layers, hence dropout for the input and output has to be added seperately.
+    /// 
+    /// Todo: implement other Rnn types such as GRU, RNN_RELU, RNN_TANH
+    /// </summary>
+    public class Rnn<T> : Differentiable
     {
-        public RNN(RNNType ty, Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, ulong dropoutSeed = 1337UL)
+        public Rnn(RnnType ty, Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, ulong dropoutSeed = 1337UL)
         {
             Type = ty;
             X = x;
@@ -109,7 +115,7 @@ namespace AleaTK.ML.Operator
             AddAuxVar(ReserveSpace);
         }
 
-        public RNNType Type { get; }
+        public RnnType Type { get; }
 
         public bool IsTraining { get; }
 
@@ -170,13 +176,11 @@ namespace AleaTK.ML.Operator
             dnn.DropoutGetStatesSize(out dropoutStatesSize);
             var dropoutStates = executor.GetTensor(DropoutStates, Shape.Create(dropoutStatesSize.ToInt64()));
             dropoutDesc.Set(dnn, (float)Dropout, dropoutStates.Buffer.Ptr, dropoutStatesSize, DropoutSeed);
-            //Console.WriteLine($"DROPOUT: {Dropout}");
 
             // rnn descriptor
             var rnnDesc = executor.RnnDescDict[RnnDesc];
             var mode = Type.Mode;
-            rnnDesc.Set(HiddenSize, NumLayers, dropoutDesc, RNNInputMode.LINEAR_INPUT, DirectionMode.UNIDIRECTIONAL,
-                mode, Dnn.DataTypeOf<T>());
+            rnnDesc.Set(HiddenSize, NumLayers, dropoutDesc, RNNInputMode.LINEAR_INPUT, DirectionMode.UNIDIRECTIONAL, mode, Dnn.DataTypeOf<T>());
 
             // weight
             var wDesc = executor.FilterDescDict[WDesc];
@@ -186,7 +190,7 @@ namespace AleaTK.ML.Operator
             var shapeW = Shape.Create(weightsSize.ToInt64()/Alea.Gpu.SizeOf<T>(), 1, 1);
             wDesc.SetND(Dnn.DataTypeOf<T>(), TensorFormat.CUDNN_TENSOR_NCHW, shapeW.AsInt32Array);
 
-            // workspace and rreservespace
+            // workspace and reserved space
             IntPtr workSize;
             dnn.GetRNNWorkspaceSize(rnnDesc, SeqLength, XDesc, out workSize);
             executor.GetTensor(Workspace, Shape.Create(workSize.ToInt64()));
@@ -222,7 +226,6 @@ namespace AleaTK.ML.Operator
             using (var filterDesc = new FilterDescriptor())
             {
                 var w = executor.GetTensor(W);
-                //Console.WriteLine($"w: {w.Buffer.Ptr.Handle}");
                 var filterDimA = new int[3];
 
                 for (var layer = 0; layer < NumLayers; ++layer)
@@ -240,30 +243,20 @@ namespace AleaTK.ML.Operator
 
                         filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
                         length = filterDimA.Aggregate(ScalarOps.Mul);
-                        //var value = 1.0/length;
 
                         var linLayerMatBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)),
                             linLayerMat);
                         var linLayerMatTensor = new Tensor<T>(linLayerMatBuffer);
-                        //var offset = (linLayerMatTensor.Buffer.Ptr.Handle.ToInt64() - w.Buffer.Ptr.Handle.ToInt64())/Gpu.SizeOf<T>();
-                        //Console.WriteLine($"w.{layer}.{linLayerId}: {offset} {nbDims} {Shape.Create(filterDimA.Select(ll => (long)ll).ToArray())} {dataType} {format}");
-                        //context.Assign(linLayerMatTensor, ScalarOps.Conv<T>(value));
                         context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length))/(Math.Sqrt(HiddenSize+InputSize).AsScalar<T>()));
-                        //context.Assign(linLayerMatTensor, RandomUniform<T>(Shape.Create(length)) *0.1.AsScalar<T>() - 0.05.AsScalar<T>());
-                        //context.Assign(linLayerMatTensor, 0.1.AsScalar<T>());
 
                         deviceptr<T> linLayerBias;
-                        dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId,
-                            filterDesc, out linLayerBias);
+                        dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId, filterDesc, out linLayerBias);
 
                         filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
                         length = filterDimA.Aggregate(ScalarOps.Mul);
 
-                        var linLayerBiasBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)),
-                            linLayerBias);
+                        var linLayerBiasBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)), linLayerBias);
                         var linLayerBiasTensor = new Tensor<T>(linLayerBiasBuffer);
-                        //offset = (linLayerBiasTensor.Buffer.Ptr.Handle.ToInt64() - w.Buffer.Ptr.Handle.ToInt64())/Gpu.SizeOf<T>();
-                        //Console.WriteLine($"b.{layer}.{linLayerId}: {offset} {nbDims} {Shape.Create(filterDimA.Select(ll => (long)ll).ToArray())} {dataType} {format}");
                         Type.InitBias(context, layer, linLayerId, linLayerBiasTensor);
                     }
                 }
@@ -347,12 +340,10 @@ namespace AleaTK.ML.Operator
                 executor.GetTensor(Y).Buffer.Ptr,
                 YDesc,
                 executor.GetGradient(Y).Buffer.Ptr,
-                StateDesc,
-                //executor.GetGradient(HY).Buffer.Ptr,
-                new deviceptr<T>(), 
-                StateDesc,
-                //executor.GetGradient(CY).Buffer.Ptr,
-                new deviceptr<T>(), 
+                StateDesc,               
+                new deviceptr<T>(), // executor.GetGradient(HY).Buffer.Ptr,
+                StateDesc,              
+                new deviceptr<T>(), // executor.GetGradient(CY).Buffer.Ptr,
                 executor.FilterDescDict[WDesc],
                 executor.GetTensor(W).Buffer.Ptr,
                 StateDesc,
@@ -389,7 +380,7 @@ namespace AleaTK.ML.Operator
                 executor.FilterDescDict[WDesc],
                 executor.GetGradient(W).Buffer.Ptr,
                 executor.GetTensor(ReserveSpace).Buffer.Ptr,
-                (IntPtr)executor.GetTensor(ReserveSpace).Shape.Length);
+                (IntPtr) executor.GetTensor(ReserveSpace).Shape.Length);
         }
     }
 }

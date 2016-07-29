@@ -10,20 +10,29 @@ The preprocessed input data is a sequence of words containing `<unk>` for words 
 
  - Input data: integer matrix $x \in \mathbb{N}_0^{n \times b}$, where $n$ is the sequence length and $b$ the minibatch size
  - Embedding layer: translating $x$ into $y \in \mathbb{R}^{n \times b \times d}$ where $d$ is the dimension of the embedding, defined in terms of the embedding weights $w \in \mathbb{R}^{s, d}$ by $y_{i,j,k} = w_{x_{i,j},k}$ 
- - Two [LSTM layers](/ml_tools.html#eq:lstm2) with input and hidden dimension $d$, unrolled $n$ steps along the first dimension of $y$, producing output $z \in \mathbb{R}^{n \times b \times d}$
+ - Two [LSTM layers](/ml_tools.html#eq:lstm2): input and hidden dimension $d$, unrolled $n$ steps along the first dimension of $y$, producing output $z \in \mathbb{R}^{n \times b \times d}$
  - [Fully connected layer](/ml_tools.html#eq:fully-connected): the input is $z$ reshaped to a matrix $\mathbb{R}^{n b \times d}$ and transformed to the output $u \in \mathbb{R}^{n b \times s}$, with $s$ the size of the vocabulary
  - [Softmax with cross entropy layer](/ml_tools.html#eq:softmax-cross-entropy): transforms $u$ into probabilities $p \in \mathbb{R}^{n b \times s}$ and calculates cross entropy $D(p \| q)$ from labels $q \in \mathbb{N}_0^{n \times b}$, given by the index in the vocabulary of the next word for each word in $x$, reshaped to an element of $\mathbb{N}_0^{n b}$.
  
 The hidden states of the LSTM layers are initialized to zero for the first minibatch. As we traverse the sequence sequentially with minibatches of size $n*b$ we can take the final hidden states of a minibatch as the initial hidden state of the next minibatch. 
 
-### Regularized LSTM Networks
+The stochastic gradient descent for training uses gradient clipping to cope with possible gradient explosion. 
 
 @DBLP:journals/corr/ZarembaSV14 show how to apply dropout regularization to recurrent neural networks in order to reduce overfitting. 
 They suggest to apply the dropout operator only to the non-recurrent connections, including the input and the output connections. 
 
-### LSTM with cuDNN
+### LSTM Implementations
 
-The `RNN` layer uses cuDNN to accelerate the forward and backward pass of multilayer LSTM networks. The article @DBLP:journals/corr/AppleyardKB16 describes in more detail the optimizations for LSTM nodes implemented in cuDNN. 
+The sample provides a direct implementation of a single LSTM layer following [Karpathy](https://gist.github.com/karpathy/587454dc0146a6ae21fc). There is basic version and an optimized version which reduces the number of kernel calls. The optimized version is used as a baseline to compare against the cuDNN accelerated implementation `Rnn<T>` of Alea TK. @DBLP:journals/corr/AppleyardKB16 describe in more detail the cuDNN optimizations for multiple stacked LSTM layers. 
+
+The following benchmarks have been executed on a GTX 970 with 4 GB device memory. The performance is measured in words per seconds.
+
+<table border="2" cellpadding="5">
+<tr><th>Model Size</th><th>Small</th><th>Medium</th><th>Large</th></tr>  
+<tr><td>Alea TK with cuDNN</td><td>14465</td><td>9469</td><td>4257</td></tr>  
+<tr><td>Direct LSTM implementation</td><td>3371</td><td>3350</td><td>1732</td></tr>  
+<tr><td>TensorFlow with GPU</td><td>10493</td><td>6341</td><td>out of memory</td></tr>  
+</table>
 
 ***
 
