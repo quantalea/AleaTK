@@ -18,7 +18,7 @@ let versionType = Some "beta"
 let majorVersion = 0
 let minorVersion = 9
 let patchVersion = 0
-let buildVersion = 2
+let buildVersion = 3
 // End of version section
 
 let version = sprintf "%d.%d.%d.%d" majorVersion minorVersion patchVersion buildVersion
