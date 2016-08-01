@@ -22,13 +22,39 @@ Deep learning is a vast field that is evolving fast. The following references an
  - [Implementing a CNN for Text Classification in TensorFlow](http://www.wildml.com/2015/12/implementing-a-cnn-for-text-classification-in-tensorflow/)
  - [Deep Learning for Chatbots, Part 1 – Introduction](http://www.wildml.com/2016/04/deep-learning-for-chatbots-part-1-introduction/)
  - [Deep Learning for Chatbots, Part 2 – Implementing a Retrieval-Based Model in Tensorflow](http://www.wildml.com/2016/07/deep-learning-for-chatbots-2-retrieval-based-model-tensorflow/)
+ - [Attention and Memory in Deep Learning and NLP](http://www.wildml.com/2016/01/attention-and-memory-in-deep-learning-and-nlp/)
  - [An Explanation of Xavier Initialization](http://andyljones.tumblr.com/post/110998971763/an-explanation-of-xavier-initialization)
  - [An overview of gradient descent optimization algorithms](http://sebastianruder.com/optimizing-gradient-descent/)
  - [A curated list of resources dedicated to recurrent neural networks](https://github.com/kjw0612/awesome-rnn)
 
 #### Papers
 
- - GoogLeNet paper by @DBLP:journals/corr/SzegedyLJSRAEVR14
+##### Convolutional Neural Networks
 
+ - @Ciresan:2011:FHP:2283516.2283603
+ 
+##### Recurrent Neural Networks
 
+ - @DBLP:journals/corr/GreffSKSS15
+ - @DBLP:journals/corr/ZarembaSV14
+ - @DBLP:journals/corr/AppleyardKB16
+
+##### Image Recognition and Object Detection
+
+ - @conf/nips/KrizhevskySH12
+ - @DBLP:journals/corr/SzegedyLJSRAEVR14
+ 
+##### Neural Machine Translation
+
+ - @DBLP:journals/corr/BahdanauCB14
+ - @DBLP:journals/corr/VinyalsKKPSH14
+ - @DBLP:journals/corr/JeanCMB14
+ - @DBLP:journals/corr/BengioVJS15
+ - @DBLP:journals/corr/ChoMGBSB14
+ - @DBLP:journals/corr/ChiuN15
+ 
+##### Embeddings 
+
+ - @linguistic-regularities-in-continuous-space-word-representations
+  
 #### References
