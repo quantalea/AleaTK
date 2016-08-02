@@ -89,7 +89,7 @@ namespace AleaTK.ML.Operator
             StateDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
 
             // xDesc is an array, for each step
-            shape = PartialShape.Create(MiniBatch, InputSize, 1);
+            shape = PartialShape.Create(1, InputSize, 1); // first dimension does not affect the weight shape and size TODO test all, tested only for LSTM
             strides = Strides.Create(shape[1]*shape[2], shape[2], 1);
             var xDesc = new TensorDescriptor();
             xDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);

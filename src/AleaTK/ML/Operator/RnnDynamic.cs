@@ -205,8 +205,7 @@ namespace AleaTK.ML.Operator
             rnnDesc.Set(HiddenSize, NumLayers, dropoutDesc, RNNInputMode.LINEAR_INPUT, DirectionMode.UNIDIRECTIONAL, mode, Dnn.DataTypeOf<T>());
 
             // initialize weight, once only, using minibatch size 1
-            // TODO test if changing 1 to different values, does it affect the weight shape?
-            var shape = PartialShape.Create(1, InputSize, 1);
+            var shape = PartialShape.Create(1, InputSize, 1); // first dimension does not affect the weight shape and size TODO test all, tested only for LSTM
             var strides = Strides.Create(shape[1] * shape[2], shape[2], 1);
             var xDesc = new TensorDescriptor();
             xDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
@@ -267,6 +266,8 @@ namespace AleaTK.ML.Operator
         /// Call AssignInitialStates at least once before Forward or Backward. 
         /// </summary>
         /// <param name="executor"></param>
+        /// <param name="hx"></param>
+        /// <param name="cx"></param>
         public void AssignInitialStates(Executor executor, Tensor<T> hx, Tensor<T> cx)
         {
             _descr.AssignInitialStates(executor, hx, cx);
