@@ -76,6 +76,7 @@
     <Compile Include="ML\Operator\Pooling.cs" />
     <Compile Include="ML\Operator\Reshape.cs" />
     <Compile Include="ML\Operator\Rnn.cs" />
+    <Compile Include="ML\Operator\RnnDynamic.cs" />
     <Compile Include="ML\Operator\Softmax.cs" />
     <Compile Include="ML\Optimizer.cs" />
     <Compile Include="ML\Symbol.cs" />

@@ -46,7 +46,7 @@ namespace AleaTK.ML.Operator
     }
 
     /// <summary>
-    /// Recurrent neural network, possibly multiple layers stacked on each other, accelerated with cuDNN.
+    /// Fully unrolled recurrent neural network, possibly multiple layers stacked on each other, accelerated with cuDNN.
     /// Note that cuDNN adds dropout only between the layers, hence dropout for the input and output has to be added seperately.
     /// 
     /// Todo: implement other Rnn types such as GRU, RNN_RELU, RNN_TANH
@@ -56,7 +56,6 @@ namespace AleaTK.ML.Operator
         public Rnn(RnnType ty, Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, ulong dropoutSeed = 1337UL)
         {
             Type = ty;
-            X = x;
             IsTraining = isTraining;
             NumLayers = numLayers;
             HiddenSize = hiddenSize;
@@ -64,6 +63,7 @@ namespace AleaTK.ML.Operator
             DropoutSeed = dropoutSeed;
 
             // X shape (seqLength, batch, inputSize)
+            X = x;
             Util.EnsureEqual(3, X.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
             Util.EnsureTrue(X.Shape[0] >= 0, "Input layout: (seqLength, batch, inputSize)");
             Util.EnsureTrue(X.Shape[1] >= 0, "Input layout: (seqLength, batch, inputSize)");
@@ -206,18 +206,18 @@ namespace AleaTK.ML.Operator
             executor.GetTensor(W, shapeW);
             if (IsTraining) executor.GetGradient(W, shapeW);
             
-            executor.GetTensor(Y, (Shape.Create(Y.Shape.AsArray)));
-            executor.GetTensor(HX, (Shape.Create(HX.Shape.AsArray)));
-            executor.GetTensor(CX, (Shape.Create(CX.Shape.AsArray)));
-            executor.GetTensor(HY, (Shape.Create(HY.Shape.AsArray)));
-            executor.GetTensor(CY, (Shape.Create(CY.Shape.AsArray)));
+            executor.GetTensor(Y, Shape.Create(Y.Shape.AsArray));
+            executor.GetTensor(HX, Shape.Create(HX.Shape.AsArray));
+            executor.GetTensor(CX, Shape.Create(CX.Shape.AsArray));
+            executor.GetTensor(HY, Shape.Create(HY.Shape.AsArray));
+            executor.GetTensor(CY, Shape.Create(CY.Shape.AsArray));
 
             if (IsTraining)
             {
-                executor.GetGradient(X, (Shape.Create(X.Shape.AsArray)));
-                executor.GetGradient(Y, (Shape.Create(Y.Shape.AsArray)));
-                executor.GetGradient(HX, (Shape.Create(HX.Shape.AsArray)));
-                executor.GetGradient(CX, (Shape.Create(CX.Shape.AsArray)));
+                executor.GetGradient(X, Shape.Create(X.Shape.AsArray));
+                executor.GetGradient(Y, Shape.Create(Y.Shape.AsArray));
+                executor.GetGradient(HX, Shape.Create(HX.Shape.AsArray));
+                executor.GetGradient(CX, Shape.Create(CX.Shape.AsArray));
             }
 
             // init weights
@@ -235,17 +235,15 @@ namespace AleaTK.ML.Operator
                         int nbDims;
                         DataType dataType;
                         TensorFormat format;
-                        int length;
 
                         deviceptr<T> linLayerMat;
                         dnn.GetRNNLinLayerMatrixParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId,
                             filterDesc, out linLayerMat);
 
                         filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
-                        length = filterDimA.Aggregate(ScalarOps.Mul);
+                        var length = filterDimA.Aggregate(ScalarOps.Mul);
 
-                        var linLayerMatBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)),
-                            linLayerMat);
+                        var linLayerMatBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)), linLayerMat);
                         var linLayerMatTensor = new Tensor<T>(linLayerMatBuffer);
                         context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length))/(Math.Sqrt(HiddenSize+InputSize).AsScalar<T>()));
 
@@ -307,7 +305,7 @@ namespace AleaTK.ML.Operator
                     rnnDesc, seqLength, xDesc, x.Buffer.Ptr, hxDesc, hx.Buffer.Ptr,
                     cxDesc, cx.Buffer.Ptr, wDesc, w.Buffer.Ptr, yDesc, y.Buffer.Ptr,
                     hyDesc, hy.Buffer.Ptr, cyDesc, cy.Buffer.Ptr,
-                    workspace.Buffer.Ptr, (IntPtr) workspace.Shape.Length);
+                    workspace.Buffer.Ptr, (IntPtr)workspace.Shape.Length);
             }
         }
 
