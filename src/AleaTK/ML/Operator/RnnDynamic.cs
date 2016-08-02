@@ -13,6 +13,9 @@ namespace AleaTK.ML.Operator
     {
         public RnnDynamicDescr(Executor executor, RnnDynamic<T> rnn)
         {
+            var context = executor.Context.ToGpuContext();
+            var dnn = context.Dnn;
+
             Rnn = rnn;
             var x = executor.GetTensor(Rnn.X);
 
@@ -20,7 +23,7 @@ namespace AleaTK.ML.Operator
             MiniBatch = (int)x.Shape[1];
 
             var shape = Shape.Create(SeqLength, MiniBatch, Rnn.HiddenSize);
-            executor.GetTensor(Rnn.HX, shape);
+            executor.GetTensor(Rnn.Y, shape);
 
             // state variables
             shape = Shape.Create(Rnn.NumLayers, MiniBatch, Rnn.HiddenSize);
@@ -46,30 +49,8 @@ namespace AleaTK.ML.Operator
             yDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
             YDesc = Enumerable.Repeat(yDesc, SeqLength).ToArray();
 
-            var context = executor.Context.ToGpuContext();
-            var dnn = context.Dnn;
-
-            // dropout
-            var dropoutDesc = executor.DropoutDescDict[Rnn.DropoutDesc];
-            IntPtr dropoutStatesSize;
-            dnn.DropoutGetStatesSize(out dropoutStatesSize);
-            var dropoutStates = executor.GetTensor(Rnn.DropoutStates, Shape.Create(dropoutStatesSize.ToInt64()));
-            dropoutDesc.Set(dnn, (float)Rnn.Dropout, dropoutStates.Buffer.Ptr, dropoutStatesSize, Rnn.DropoutSeed);
-
-            // rnn descriptor
-            var rnnDesc = executor.RnnDescDict[Rnn.RnnDesc];
-            var mode = Rnn.Type.Mode;
-            rnnDesc.Set(Rnn.HiddenSize, Rnn.NumLayers, dropoutDesc, RNNInputMode.LINEAR_INPUT, DirectionMode.UNIDIRECTIONAL, mode, Dnn.DataTypeOf<T>());
-
-            // weight
-            var wDesc = executor.FilterDescDict[Rnn.WDesc];
-            IntPtr weightsSize;
-            dnn.GetRNNParamsSize(rnnDesc, XDesc[0], out weightsSize, Dnn.DataTypeOf<T>());
-            Util.EnsureTrue(weightsSize.ToInt64() % Gpu.SizeOf<T>() == 0);
-            var shapeW = Shape.Create(weightsSize.ToInt64() / Alea.Gpu.SizeOf<T>(), 1, 1);
-            wDesc.SetND(Dnn.DataTypeOf<T>(), TensorFormat.CUDNN_TENSOR_NCHW, shapeW.AsInt32Array);
-
             // workspace and reserved space
+            var rnnDesc = executor.RnnDescDict[rnn.RnnDesc];
             IntPtr workSize;
             dnn.GetRNNWorkspaceSize(rnnDesc, SeqLength, XDesc, out workSize);
             executor.GetTensor(Rnn.Workspace, Shape.Create(workSize.ToInt64()));
@@ -79,65 +60,12 @@ namespace AleaTK.ML.Operator
                 IntPtr reserveSize;
                 dnn.GetRNNTrainingReserveSize(rnnDesc, SeqLength, XDesc, out reserveSize);
                 executor.GetTensor(Rnn.ReserveSpace, Shape.Create(reserveSize.ToInt64()));
-            }
 
-            // since we are using cuDNN, we'd better make sure these varaibles are allocated
-            executor.GetTensor(Rnn.W, shapeW);
-            if (Rnn.IsTraining) executor.GetGradient(Rnn.W, shapeW);
-
-            executor.GetTensor(Rnn.Y, Shape.Create(Rnn.Y.Shape.AsArray));
-
-            if (Rnn.IsTraining)
-            {
                 executor.GetGradient(Rnn.X, Shape.Create(Rnn.X.Shape.AsArray));
                 executor.GetGradient(Rnn.Y, Shape.Create(Rnn.Y.Shape.AsArray));
                 executor.GetGradient(Rnn.HX, Shape.Create(Rnn.HX.Shape.AsArray));
                 executor.GetGradient(Rnn.CX, Shape.Create(Rnn.CX.Shape.AsArray));
             }
-
-            // init weights
-            var numLinearLayers = Rnn.Type.NumLinLayers;
-
-            using (var filterDesc = new FilterDescriptor())
-            {
-                var w = executor.GetTensor(Rnn.W);
-                var filterDimA = new int[3];
-
-                for (var layer = 0; layer < Rnn.NumLayers; ++layer)
-                {
-                    for (var linLayerId = 0; linLayerId < numLinearLayers; ++linLayerId)
-                    {
-                        int nbDims;
-                        DataType dataType;
-                        TensorFormat format;
-
-                        deviceptr<T> linLayerMat;
-                        dnn.GetRNNLinLayerMatrixParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId, filterDesc, out linLayerMat);
-
-                        filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
-                        var length = filterDimA.Aggregate(ScalarOps.Mul);
-
-                        var linLayerMatBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)),
-                            linLayerMat);
-                        var linLayerMatTensor = new Tensor<T>(linLayerMatBuffer);
-                        context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length)) / (Math.Sqrt(Rnn.HiddenSize + Rnn.InputSize).AsScalar<T>()));
-
-                        deviceptr<T> linLayerBias;
-                        dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId, filterDesc, out linLayerBias);
-
-                        filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
-                        length = filterDimA.Aggregate(ScalarOps.Mul);
-
-                        var linLayerBiasBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)), linLayerBias);
-                        var linLayerBiasTensor = new Tensor<T>(linLayerBiasBuffer);
-                        Rnn.Type.InitBias(context, layer, linLayerId, linLayerBiasTensor);
-                    }
-                }
-            }
-
-            const double value = 0.0;
-            executor.AssignTensor(Rnn.HX, Fill(Shape.Create(Rnn.HX.Shape.AsArray), ScalarOps.Conv<T>(value)));
-            executor.AssignTensor(Rnn.CX, Fill(Shape.Create(Rnn.CX.Shape.AsArray), ScalarOps.Conv<T>(value)));
         }
 
         public RnnDynamic<T> Rnn { get; }
@@ -151,6 +79,19 @@ namespace AleaTK.ML.Operator
         public TensorDescriptor[] XDesc { get; }
 
         public TensorDescriptor[] YDesc { get; }
+
+        public void AssignInitialStates(Executor executor, Tensor<T> hx, Tensor<T> cx)
+        {
+            executor.AssignTensor(Rnn.HX, hx);
+            executor.AssignTensor(Rnn.CX, cx);
+        }
+
+        public void AssignInitialStates(Executor executor)
+        {
+            const double value = 0.0;
+            executor.AssignTensor(Rnn.HX, Fill(Shape.Create(Rnn.HX.Shape.AsArray), ScalarOps.Conv<T>(value)));
+            executor.AssignTensor(Rnn.CX, Fill(Shape.Create(Rnn.CX.Shape.AsArray), ScalarOps.Conv<T>(value)));
+        }
     }
 
     /// <summary>
@@ -248,7 +189,96 @@ namespace AleaTK.ML.Operator
 
         public override void Initialize(Executor executor)
         {
+            var context = executor.Context.ToGpuContext();
+            var dnn = context.Dnn;
+
+            // dropout
+            var dropoutDesc = executor.DropoutDescDict[DropoutDesc];
+            IntPtr dropoutStatesSize;
+            dnn.DropoutGetStatesSize(out dropoutStatesSize);
+            var dropoutStates = executor.GetTensor(DropoutStates, Shape.Create(dropoutStatesSize.ToInt64()));
+            dropoutDesc.Set(dnn, (float)Dropout, dropoutStates.Buffer.Ptr, dropoutStatesSize, DropoutSeed);
+
+            // rnn descriptor
+            var rnnDesc = executor.RnnDescDict[RnnDesc];
+            var mode = Type.Mode;
+            rnnDesc.Set(HiddenSize, NumLayers, dropoutDesc, RNNInputMode.LINEAR_INPUT, DirectionMode.UNIDIRECTIONAL, mode, Dnn.DataTypeOf<T>());
+
+            // initialize weight, once only, using minibatch size 1
+            // TODO test if changing 1 to different values, does it affect the weight shape?
+            var shape = PartialShape.Create(1, InputSize, 1);
+            var strides = Strides.Create(shape[1] * shape[2], shape[2], 1);
+            var xDesc = new TensorDescriptor();
+            xDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
+            var wDesc = executor.FilterDescDict[WDesc];
+            IntPtr weightsSize;
+            dnn.GetRNNParamsSize(rnnDesc, xDesc, out weightsSize, Dnn.DataTypeOf<T>());
+            Util.EnsureTrue(weightsSize.ToInt64() % Gpu.SizeOf<T>() == 0);
+            var shapeW = Shape.Create(weightsSize.ToInt64() / Alea.Gpu.SizeOf<T>(), 1, 1);
+            wDesc.SetND(Dnn.DataTypeOf<T>(), TensorFormat.CUDNN_TENSOR_NCHW, shapeW.AsInt32Array);
+
+            // since we are using cuDNN, we'd better make sure these varaibles are allocated
+            executor.GetTensor(W, shapeW);
+            if (IsTraining) executor.GetGradient(W, shapeW);
+
+            // init weights
+            var numLinearLayers = Type.NumLinLayers;
+
+            using (var filterDesc = new FilterDescriptor())
+            {
+                var w = executor.GetTensor(W);
+                var filterDimA = new int[3];
+
+                for (var layer = 0; layer < NumLayers; ++layer)
+                {
+                    for (var linLayerId = 0; linLayerId < numLinearLayers; ++linLayerId)
+                    {
+                        int nbDims;
+                        DataType dataType;
+                        TensorFormat format;
+
+                        deviceptr<T> linLayerMat;
+                        dnn.GetRNNLinLayerMatrixParams(rnnDesc, layer, xDesc, wDesc, w.Buffer.Ptr, linLayerId, filterDesc, out linLayerMat);
+
+                        filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
+                        var length = filterDimA.Aggregate(ScalarOps.Mul);
+
+                        var linLayerMatBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)), linLayerMat);
+                        var linLayerMatTensor = new Tensor<T>(linLayerMatBuffer);
+                        context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length)) / (Math.Sqrt(HiddenSize + InputSize).AsScalar<T>()));
+
+                        deviceptr<T> linLayerBias;
+                        dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, xDesc, wDesc, w.Buffer.Ptr, linLayerId, filterDesc, out linLayerBias);
+
+                        filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
+                        length = filterDimA.Aggregate(ScalarOps.Mul);
+
+                        var linLayerBiasBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)), linLayerBias);
+                        var linLayerBiasTensor = new Tensor<T>(linLayerBiasBuffer);
+                        Type.InitBias(context, layer, linLayerId, linLayerBiasTensor);
+                    }
+                }
+            }
+
             base.Initialize(executor);
+        }
+
+        /// <summary>
+        /// Call AssignInitialStates at least once before Forward or Backward. 
+        /// </summary>
+        /// <param name="executor"></param>
+        public void AssignInitialStates(Executor executor, Tensor<T> hx, Tensor<T> cx)
+        {
+            _descr.AssignInitialStates(executor, hx, cx);
+        }
+
+        /// <summary>
+        /// Call AssignInitialStates at least once before Forward or Backward. 
+        /// </summary>
+        /// <param name="executor"></param>
+        public void AssignInitialStates(Executor executor)
+        {
+            _descr.AssignInitialStates(executor);
         }
 
         public override void Forward(Executor executor)
