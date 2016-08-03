@@ -401,7 +401,7 @@ namespace AleaTK
             }
         }
 
-        public void Print<T>(Func<long, T> read)
+        public void Print<T>(Func<long, T> read, bool all = false)
         {
             Console.WriteLine("=====================================");
             Console.WriteLine($"Rank({Rank}) Shape({Shape}) Strides({Strides})");
@@ -422,7 +422,7 @@ namespace AleaTK
             if (Rank == 1)
             {
                 const long itemsPerRow = 5;
-                const long maxItems = 100;
+                var maxItems = all ? long.MaxValue : 100;
                 var length = Shape[0];
                 var stride = Strides[0];
                 for (var i = 0L; i < length && i < maxItems; ++i)
@@ -459,8 +459,8 @@ namespace AleaTK
 
             if (Rank == 2)
             {
-                const long maxCols = 10;
-                const long maxRows = 10;
+                var maxCols = all ? long.MaxValue : 10;
+                var maxRows = all ? long.MaxValue : 10;
                 var rows = Shape[0];
                 var cols = Shape[1];
                 var rowStride = Strides[0];

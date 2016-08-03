@@ -86,11 +86,10 @@ namespace AleaTK.ML.Operator
             executor.AssignTensor(Rnn.CX, cx);
         }
 
-        public void AssignInitialStates(Executor executor)
+        public void ZeroInitialStates(Executor executor)
         {
-            const double value = 0.0;
-            executor.AssignTensor(Rnn.HX, Fill(Shape.Create(Rnn.HX.Shape.AsArray), ScalarOps.Conv<T>(value)));
-            executor.AssignTensor(Rnn.CX, Fill(Shape.Create(Rnn.CX.Shape.AsArray), ScalarOps.Conv<T>(value)));
+            executor.AssignTensor(Rnn.HX, Fill(Shape.Create(Rnn.HX.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignTensor(Rnn.CX, Fill(Shape.Create(Rnn.CX.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
         }
     }
 
@@ -263,7 +262,7 @@ namespace AleaTK.ML.Operator
         }
 
         /// <summary>
-        /// Call AssignInitialStates at least once before Forward or Backward. 
+        /// Call ZeroInitialStates at least once before Forward or Backward. 
         /// </summary>
         /// <param name="executor"></param>
         /// <param name="hx"></param>
@@ -275,13 +274,13 @@ namespace AleaTK.ML.Operator
         }
 
         /// <summary>
-        /// Call AssignInitialStates at least once before Forward or Backward. 
+        /// Call ZeroInitialStates at least once before Forward or Backward. 
         /// </summary>
         /// <param name="executor"></param>
-        public void AssignInitialStates(Executor executor)
+        public void ZeroInitialStates(Executor executor)
         {
             var descr = (RnnDynamicDescr<T>)executor.Objects[Descr];
-            descr.AssignInitialStates(executor);
+            descr.ZeroInitialStates(executor);
         }
 
         public override void Forward(Executor executor)

@@ -342,10 +342,10 @@ namespace Tutorial.Samples
                 dw2 = exe.GetGradient(lstm.W).ToArray2D();
             }
 
-            AreClose(y1.AsTensor().ToArray(), y2.AsTensor().ToArray(), error);
+            AreClose(y1, y2, error);
             AreClose(cy1, cy2, error);
             AreClose(hy1, hy2, error);
-            AreClose(dx1.AsTensor().ToArray(), dx2.AsTensor().ToArray(), error);
+            AreClose(dx1, dx2, error);
             AreClose(dcx1, dcx2, error);
             AreClose(dhx1, dhx2, error);
             AreClose(dw1, dw2, error);

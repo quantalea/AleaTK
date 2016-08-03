@@ -230,6 +230,23 @@ namespace AleaTKUtil
             }
         }
 
+        public static void AreClose(double[,,] expected, double[,,] actual, double error)
+        {
+            Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
+            Assert.AreEqual(expected.GetLength(1), actual.GetLength(1));
+            Assert.AreEqual(expected.GetLength(2), actual.GetLength(2));
+            for (var i = 0; i < expected.GetLength(0); ++i)
+            {
+                for (var j = 0; j < expected.GetLength(1); ++j)
+                {
+                    for (var k = 0; k < expected.GetLength(2); ++k)
+                    {
+                        Assert.That(actual[i, j, k], Is.EqualTo(expected[i, j, k]).Within(error));
+                    }
+                }
+            }
+        }
+
         public static void AreClose(float[,] expected, float[,] actual, double error)
         {
             Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
@@ -239,6 +256,23 @@ namespace AleaTKUtil
                 for (var col = 0; col < expected.GetLength(1); ++col)
                 {
                     Assert.That(actual[row, col], Is.EqualTo(expected[row, col]).Within(error));
+                }
+            }
+        }
+
+        public static void AreClose(float[,,] expected, float[,,] actual, double error)
+        {
+            Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
+            Assert.AreEqual(expected.GetLength(1), actual.GetLength(1));
+            Assert.AreEqual(expected.GetLength(2), actual.GetLength(2));
+            for (var i = 0; i < expected.GetLength(0); ++i)
+            {
+                for (var j = 0; j < expected.GetLength(1); ++j)
+                {
+                    for (var k = 0; k < expected.GetLength(2); ++k)
+                    {
+                        Assert.That(actual[i, j, k], Is.EqualTo(expected[i, j, k]).Within(error));
+                    }
                 }
             }
         }

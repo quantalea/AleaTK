@@ -10,6 +10,7 @@ namespace AleaTKTest
     {
         static void Main(string[] args)
         {
+            Rnn.RnnAgainstRnnDynamic();
         }
     }
 }
