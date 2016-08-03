@@ -185,7 +185,7 @@ namespace AleaTK.ML.Operator
 
         public readonly Symbol RnnDesc = new Symbol();
 
-        private RnnDynamicDescr<T> _descr;
+        public readonly Symbol Descr = new Symbol();
 
         public override void Initialize(Executor executor)
         {
@@ -270,7 +270,8 @@ namespace AleaTK.ML.Operator
         /// <param name="cx"></param>
         public void AssignInitialStates(Executor executor, Tensor<T> hx, Tensor<T> cx)
         {
-            _descr.AssignInitialStates(executor, hx, cx);
+            var descr = (RnnDynamicDescr<T>) executor.Objects[Descr];
+            descr.AssignInitialStates(executor, hx, cx);
         }
 
         /// <summary>
@@ -279,30 +280,33 @@ namespace AleaTK.ML.Operator
         /// <param name="executor"></param>
         public void AssignInitialStates(Executor executor)
         {
-            _descr.AssignInitialStates(executor);
+            var descr = (RnnDynamicDescr<T>)executor.Objects[Descr];
+            descr.AssignInitialStates(executor);
         }
 
         public override void Forward(Executor executor)
         {
-            _descr = new RnnDynamicDescr<T>(executor, this);
+            var descr = new RnnDynamicDescr<T>(executor, this);
+            executor.Objects[Descr] = (object) descr;
+
             var context = executor.Context.ToGpuContext();
             var dnn = context.Dnn;
             var rnnDesc = executor.RnnDescDict[RnnDesc];
-            var seqLength = _descr.SeqLength;
-            var xDesc = _descr.XDesc;
+            var seqLength = descr.SeqLength;
+            var xDesc = descr.XDesc;
             var x = executor.GetTensor(X);
 
-            var hxDesc = _descr.StateDesc;
+            var hxDesc = descr.StateDesc;
             var hx = executor.GetTensor(HX);
-            var cxDesc = _descr.StateDesc;
+            var cxDesc = descr.StateDesc;
             var cx = executor.GetTensor(CX);
             var wDesc = executor.FilterDescDict[WDesc];
             var w = executor.GetTensor(W);
-            var yDesc = _descr.YDesc;
+            var yDesc = descr.YDesc;
             var y = executor.GetTensor(Y);
-            var hyDesc = _descr.StateDesc;
+            var hyDesc = descr.StateDesc;
             var hy = executor.GetTensor(HY);
-            var cyDesc = _descr.StateDesc;
+            var cyDesc = descr.StateDesc;
             var cy = executor.GetTensor(CY);
             var workspace = executor.GetTensor(Workspace);
 
@@ -328,6 +332,8 @@ namespace AleaTK.ML.Operator
 
         public override void Backward(Executor executor)
         {
+            var descr = (RnnDynamicDescr<T>)executor.Objects[Descr];
+
             Util.EnsureTrue(IsTraining);
 
             var context = executor.Context.ToGpuContext();
@@ -350,26 +356,26 @@ namespace AleaTK.ML.Operator
 
             dnn.RNNBackwardData(
                 executor.RnnDescDict[RnnDesc],
-                _descr.SeqLength,
-                _descr.YDesc,
+                descr.SeqLength,
+                descr.YDesc,
                 executor.GetTensor(Y).Buffer.Ptr,
-                _descr.YDesc,
+                descr.YDesc,
                 executor.GetGradient(Y).Buffer.Ptr,
-                _descr.StateDesc,               
+                descr.StateDesc,               
                 new deviceptr<T>(), // executor.GetGradient(HY).Buffer.Ptr,
-                _descr.StateDesc,              
+                descr.StateDesc,              
                 new deviceptr<T>(), // executor.GetGradient(CY).Buffer.Ptr,
                 executor.FilterDescDict[WDesc],
                 executor.GetTensor(W).Buffer.Ptr,
-                _descr.StateDesc,
+                descr.StateDesc,
                 executor.GetTensor(HX).Buffer.Ptr,
-                _descr.StateDesc,
+                descr.StateDesc,
                 executor.GetTensor(CX).Buffer.Ptr,
-                _descr.XDesc,
+                descr.XDesc,
                 executor.GetGradient(X).Buffer.Ptr,
-                _descr.StateDesc,
+                descr.StateDesc,
                 executor.GetGradient(HX).Buffer.Ptr,
-                _descr.StateDesc,
+                descr.StateDesc,
                 executor.GetGradient(CX).Buffer.Ptr,
                 executor.GetTensor(Workspace).Buffer.Ptr,
                 (IntPtr) executor.GetTensor(Workspace).Shape.Length,
@@ -383,12 +389,12 @@ namespace AleaTK.ML.Operator
 
             dnn.RNNBackwardWeights(
                 executor.RnnDescDict[RnnDesc],
-                _descr.SeqLength,
-                _descr.XDesc,
+                descr.SeqLength,
+                descr.XDesc,
                 executor.GetTensor(X).Buffer.Ptr,
-                _descr.StateDesc,
+                descr.StateDesc,
                 executor.GetTensor(HX).Buffer.Ptr,
-                _descr.YDesc,
+                descr.YDesc,
                 executor.GetTensor(Y).Buffer.Ptr,
                 executor.GetTensor(Workspace).Buffer.Ptr,
                 (IntPtr) executor.GetTensor(Workspace).Shape.Length,

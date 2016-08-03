@@ -105,6 +105,10 @@ namespace AleaTK.ML
             new DisposableDictionary<Symbol, RNNDescriptor>(_ => new RNNDescriptor());
         #endregion
 
+        public Dictionary<Symbol, object> Objects { get; set; }
+
+        public Dictionary<Symbol, IDisposable> Dispobales { get; set; }
+
         public Executor(Context ctx, Variable loss)
         {
             Context = ctx;
