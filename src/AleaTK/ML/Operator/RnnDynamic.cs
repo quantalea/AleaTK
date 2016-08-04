@@ -61,10 +61,10 @@ namespace AleaTK.ML.Operator
                 dnn.GetRNNTrainingReserveSize(rnnDesc, SeqLength, XDesc, out reserveSize);
                 executor.GetTensor(Rnn.ReserveSpace, Shape.Create(reserveSize.ToInt64()));
 
-                executor.GetGradient(Rnn.X, Shape.Create(Rnn.X.Shape.AsArray));
-                executor.GetGradient(Rnn.Y, Shape.Create(Rnn.Y.Shape.AsArray));
-                executor.GetGradient(Rnn.HX, Shape.Create(Rnn.HX.Shape.AsArray));
-                executor.GetGradient(Rnn.CX, Shape.Create(Rnn.CX.Shape.AsArray));
+                executor.GetGradient(Rnn.X, x.Shape);
+                executor.GetGradient(Rnn.Y, Shape.Create(SeqLength, MiniBatch, Rnn.HiddenSize));
+                executor.GetGradient(Rnn.HX, Shape.Create(Rnn.NumLayers, MiniBatch, Rnn.HiddenSize));
+                executor.GetGradient(Rnn.CX, Shape.Create(Rnn.NumLayers, MiniBatch, Rnn.HiddenSize));
             }
         }
 
@@ -212,8 +212,8 @@ namespace AleaTK.ML.Operator
             IntPtr weightsSize;
             dnn.GetRNNParamsSize(rnnDesc, xDesc, out weightsSize, Dnn.DataTypeOf<T>());
             Util.EnsureTrue(weightsSize.ToInt64() % Gpu.SizeOf<T>() == 0);
-            var shapeW = Shape.Create(weightsSize.ToInt64() / Alea.Gpu.SizeOf<T>(), 1, 1);
-            wDesc.SetND(Dnn.DataTypeOf<T>(), TensorFormat.CUDNN_TENSOR_NCHW, shapeW.AsInt32Array);
+            var shapeW = Shape.Create(weightsSize.ToInt64() / Alea.Gpu.SizeOf<T>());
+            wDesc.SetND(Dnn.DataTypeOf<T>(), TensorFormat.CUDNN_TENSOR_NCHW, new [] {(int)shapeW[0], 1, 1});
 
             // since we are using cuDNN, we'd better make sure these varaibles are allocated
             executor.GetTensor(W, shapeW);
@@ -286,7 +286,7 @@ namespace AleaTK.ML.Operator
         public override void Forward(Executor executor)
         {
             var descr = new RnnDynamicDescr<T>(executor, this);
-            executor.Objects[Descr] = (object) descr;
+            executor.Objects[Descr] = descr;
 
             var context = executor.Context.ToGpuContext();
             var dnn = context.Dnn;

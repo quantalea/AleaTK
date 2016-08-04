@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using AleaTK;
 using AleaTK.ML;
@@ -90,7 +91,7 @@ namespace AleaTKTest
             float[,,] y1, y2, dx1, dx2;
             float[,] cy1, cy2, hy1, hy2;
             float[,] dcx1, dcx2, dhx1, dhx2;
-            float[,] dw1, dw2;
+            float[] dw1, dw2;
 
             {
                 var x = Variable<float>(PartialShape.Create(seqLength, batchSize, inputSize));
@@ -122,7 +123,8 @@ namespace AleaTKTest
                 dx1 = exe.GetGradient(lstm.X).ToArray3D();
                 dcx1 = exe.GetGradient(lstm.CX).Reshape(batchSize, hiddenSize).ToArray2D();
                 dhx1 = exe.GetGradient(lstm.HX).Reshape(batchSize, hiddenSize).ToArray2D();
-                dw1 = exe.GetGradient(lstm.W).ToArray2D();
+                // cudnn weight is 1D linear blob
+                dw1 = exe.GetGradient(lstm.W).ToArray();
             }
 
             {
@@ -155,7 +157,7 @@ namespace AleaTKTest
                 dx2 = exe.GetGradient(lstm.X).ToArray3D();
                 dcx2 = exe.GetGradient(lstm.CX).Reshape(batchSize, hiddenSize).ToArray2D();
                 dhx2 = exe.GetGradient(lstm.HX).Reshape(batchSize, hiddenSize).ToArray2D();
-                dw2 = exe.GetGradient(lstm.W).ToArray2D();
+                dw2 = exe.GetGradient(lstm.W).ToArray();
             }
 
             AreClose(y1, y2, error);

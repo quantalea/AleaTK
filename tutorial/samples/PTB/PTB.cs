@@ -826,7 +826,7 @@ namespace Tutorial.Samples
             Run(false, CfgType, true);
         }
 
-        [Test]
+        [Test, Ignore("Developing test")]
         public static void PrintWords()
         {
             var ptb = new Data(DataPath);
