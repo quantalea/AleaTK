@@ -326,6 +326,22 @@ namespace AleaTKTest
             }
         }
 
+        public static void Preprocess(string trainingDataFilename, string testDataFilename, string trainingTokenizedFilename, string testTokenizedFilename, 
+            string vocabularyFilename, int maxVocabularySize = 100000, bool normalizeDigits = true)
+        {
+            var vocabulary = CreateVocabulary(trainingDataFilename, maxVocabularySize, normalizeDigits);
+            vocabulary.Item1.Save(vocabularyFilename);
+            TextToTokenIds(trainingDataFilename, trainingTokenizedFilename, vocabulary.Item1);
+            TextToTokenIds(testDataFilename, trainingTokenizedFilename, vocabulary.Item1, normalizeDigits);
+        }
+
+        /// <summary>
+        /// Distribute data into different buckets according to their sequence length given in buckets. 
+        /// </summary>
+        /// <param name="sourceLanguage"></param>
+        /// <param name="targetLanguage"></param>
+        /// <param name="buckets"></param>
+        /// <returns></returns>
         public static BucketedData PrepareForTraining(string sourceLanguage, string targetLanguage, IEnumerable<Tuple<int, int>> buckets)
         {
             var bucketedData = new BucketedData(buckets);
@@ -356,18 +372,21 @@ namespace AleaTKTest
         public static void Preprocess(int maxVocabularySize = 100000, bool normalizeDigits = true)
         {
             var englishTraining = Data.Name(Path.Combine("training-giga-fren", "giga-fren.release2.en"));
-            var english = Data.CreateVocabulary(englishTraining, maxVocabularySize, normalizeDigits);
-            english.Item1.Save(Data.Name("english_vocabulary.txt"));
-            Data.TextToTokenIds(englishTraining, Data.Name("english_train.txt"), english.Item1);
-            Data.TextToTokenIds(Data.Name(Path.Combine("dev-v2", "dev", "newstest2013.en")), Data.Name("english_dev.txt"), english.Item1, normalizeDigits);
+            var englishTest = Data.Name(Path.Combine("dev-v2", "dev", "newstest2013.en"));
+            var englishTrainingTokenized = Data.Name("english_train.txt");
+            var englishTestTokenized = Data.Name("english_dev.txt");
+            var englishVocabulary = Data.Name("english_vocabulary.txt");
+            Data.Preprocess(englishTraining, englishTest, englishTrainingTokenized, englishTestTokenized, englishVocabulary, maxVocabularySize, normalizeDigits);
 
             var frenchTraining = Data.Name(Path.Combine("training-giga-fren", "giga-fren.release2.fr"));
-            var french = Data.CreateVocabulary(frenchTraining, maxVocabularySize, normalizeDigits);
-            french.Item1.Save(Data.Name("french_vocabulary.txt"));
-            Data.TextToTokenIds(frenchTraining, Data.Name("french_train.txt"), french.Item1);
-            Data.TextToTokenIds(Data.Name(Path.Combine("dev-v2", "dev", "newstest2013.fr")), Data.Name("french_dev.txt"), french.Item1, normalizeDigits);
+            var frenchTest = Data.Name(Path.Combine("dev-v2", "dev", "newstest2013.fr"));
+            var frenchTrainingTokenized = Data.Name("french_train.txt");
+            var frenchTestTokenized = Data.Name("french_dev.txt");
+            var frenchVocabulary = Data.Name("french_vocabulary.txt");
+            Data.Preprocess(frenchTraining, frenchTest, frenchTrainingTokenized, frenchTestTokenized, frenchVocabulary, maxVocabularySize, normalizeDigits);
         }
 
+        // highlight word with tokenId in sencence with underscore for better readabiltiy
         private static void Emphasize(IEnumerable<int> sentence, int tokenId, Vocabulary vocabulary)
         {
             var text = sentence.Select(id => id == tokenId ? "__" + vocabulary.Words[id] + "__" : vocabulary.Words[id]).ToArray();

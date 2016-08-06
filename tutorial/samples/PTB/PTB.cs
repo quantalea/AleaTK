@@ -487,7 +487,7 @@ namespace Tutorial.Samples
                 return totalWords;
             }
 
-            public static void BuildVocab(string path, out Dictionary<string, int> word2id, out Dictionary<int, string> id2word)
+            public static void BuildVocabulary(string path, out Dictionary<string, int> word2id, out Dictionary<int, string> id2word)
             {
                 var data = ReadWords(path).Distinct().ToList();
                 data.Sort();
@@ -530,7 +530,7 @@ namespace Tutorial.Samples
                 var validPath = Path.Combine(dataPath, "ptb.valid.txt");
                 var testPath = Path.Combine(dataPath, "ptb.test.txt");
 
-                BuildVocab(trainPath, out WordToIdDict, out IdToWordDict);
+                BuildVocabulary(trainPath, out WordToIdDict, out IdToWordDict);
 
                 TrainData = ReadWords(trainPath).Select(WordToId).ToArray();
                 ValidData = ReadWords(validPath).Select(WordToId).ToArray();
