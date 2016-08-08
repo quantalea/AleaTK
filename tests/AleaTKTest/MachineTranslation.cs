@@ -109,21 +109,42 @@ namespace AleaTKTest
     {
         public Tuple<int, int>[] Buckets { get; }
 
+        public int MaxSourceBucketSize { get; }
+
+        public int MaxTargetBucketSize { get; }
+
         public List<int[]>[] SourceLanguage { get; } 
 
         public List<int[]>[] TargetLanguage { get; }
 
-        public BucketedData(IEnumerable<Tuple<int, int>> buckets )
+        public int MaxSourceLength { get; private set; } = -1;
+
+        public int MaxTargetLength { get; private set; } = -1;
+
+        public int Skipped { get; private set; } = 0;
+
+        public IEnumerable<int> BucketSizes => SourceLanguage.Select(bucket => bucket.Count);
+
+        public BucketedData(IEnumerable<Tuple<int, int>> buckets)
         {
             Buckets = buckets.ToArray();
-            SourceLanguage = new List<int[]>[Buckets.Length];
-            TargetLanguage = new List<int[]>[Buckets.Length];
+            SourceLanguage = Enumerable.Range(0, Buckets.Length).Select(i => new List<int[]>()).ToArray();
+            TargetLanguage = Enumerable.Range(0, Buckets.Length).Select(i => new List<int[]>()).ToArray();
+            MaxSourceBucketSize = Buckets.Select(i => i.Item1).Max();
+            MaxTargetBucketSize = Buckets.Select(i => i.Item2).Max();
         }
 
         public void Add(int[] source, int[] target)
         {
+            if (source.Length >= MaxSourceBucketSize || target.Length > MaxTargetBucketSize)
+            {
+                Skipped++;
+                return;
+            }
             for (var i = 0; i < Buckets.Length; ++i)
             {
+                MaxSourceLength = Math.Max(MaxSourceLength, source.Length);
+                MaxTargetLength = Math.Max(MaxTargetLength, target.Length);
                 if (source.Length < Buckets[i].Item1 && target.Length < Buckets[i].Item2)
                 {
                     SourceLanguage[i].Add(source);
@@ -345,17 +366,24 @@ namespace AleaTKTest
         public static BucketedData PrepareForTraining(string sourceLanguage, string targetLanguage, IEnumerable<Tuple<int, int>> buckets)
         {
             var bucketedData = new BucketedData(buckets);
-            var source = ReadTokenized(sourceLanguage).ToArray();
-            var target = ReadTokenized(targetLanguage).ToArray();
 
-            if (source.Length != target.Length)
-                throw new ArgumentException($"source language data set {sourceLanguage} and target language data set ${targetLanguage} have different number of sentences");
-
-            for (var i = 0; i < source.Length; ++i)
+            using (var file1 = new StreamReader(sourceLanguage, Encoding.UTF8, true))
+            using (var file2 = new StreamReader(targetLanguage, Encoding.UTF8, true))
             {
-                bucketedData.Add(source[i], target[i]);
-            }
+                var counter = 0;
+                string line1, line2;
+                while ((line1 = file1.ReadLine()) != null && (line2 = file2.ReadLine()) != null)
+                {
+                    var source = line1.Trim().Split(null).Select(int.Parse).ToArray();
+                    var target = line2.Trim().Split(null).Select(int.Parse).ToArray();
 
+                    counter++;
+                    if (counter%100000 == 0)
+                        Console.WriteLine($"PrepareForTraining {sourceLanguage} {targetLanguage} : line {counter}");
+
+                    bucketedData.Add(source, target);
+                }
+            }
             return bucketedData;
         }
     }
@@ -457,6 +485,19 @@ namespace AleaTKTest
             var en = Data.Name(Path.Combine("training-giga-fren", "giga-fren.release2.en"));
             var fr = Data.Name(Path.Combine("training-giga-fren", "giga-fren.release2.fr"));
             Data.Display(en, fr, 1000);
+        }
+
+        [Test]
+        public static void TestBucketing()
+        {
+            Tuple<int, int>[] buckets = { new Tuple<int, int>(10, 15), new Tuple<int, int>(20, 25), new Tuple<int, int>(40, 50) };
+
+            var bucketed = Data.PrepareForTraining(Data.Name("english_train.txt"), Data.Name("french_train.txt"), buckets);
+
+            Console.WriteLine($"{bucketed.MaxSourceLength}, {bucketed.MaxTargetLength}");
+            var bucketSizes = bucketed.BucketSizes.ToArray();
+            bucketSizes.Iter((b, i) => Console.Write($"{b}, "));
+            Console.WriteLine($"data points : {bucketSizes.Sum()}, skipped : {bucketed.Skipped} of total {bucketSizes.Sum() + bucketed.Skipped}");
         }
 
         [Test]

@@ -13,7 +13,8 @@ namespace AleaTKTest
             //Rnn.RnnAgainstRnnDynamic();
             //MachineTranslation.TestCreateVocabulary();
             //MachineTranslation.Preprocess();
-            MachineTranslation.BackTranslate();
+            //MachineTranslation.BackTranslate();
+            MachineTranslation.TestBucketing();
         }
     }
 }
