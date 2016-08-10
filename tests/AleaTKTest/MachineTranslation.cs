@@ -4,10 +4,12 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
+using System.Security.Cryptography;
 using System.Security.Policy;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using AleaTK;
 using AleaTKTest;
 using AleaTKUtil;
 using ICSharpCode.SharpZipLib.Tar;
@@ -107,51 +109,166 @@ namespace AleaTKTest
 
     public class BucketedData
     {
-        public Tuple<int, int>[] Buckets { get; }
+        public Tuple<int, int>[] BucketSequenceLengths { get; }
 
-        public int MaxSourceBucketSize { get; }
+        public int NumBuckets { get; }
 
-        public int MaxTargetBucketSize { get; }
+        public int MaxSourceSequenceLength { get; }
 
-        public List<int[]>[] SourceLanguage { get; } 
+        public int MaxTargetSequenceLength { get; }
+
+        public List<int[]>[] SourceLanguage { get; }
 
         public List<int[]>[] TargetLanguage { get; }
 
-        public int MaxSourceLength { get; private set; } = -1;
-
-        public int MaxTargetLength { get; private set; } = -1;
-
         public int Skipped { get; private set; } = 0;
 
-        public IEnumerable<int> BucketSizes => SourceLanguage.Select(bucket => bucket.Count);
+        public int[] BucketSizes => SourceLanguage.Select(bucket => bucket.Count).ToArray();
 
-        public BucketedData(IEnumerable<Tuple<int, int>> buckets)
+        public int NumDataPoints => BucketSizes.Sum();
+
+        public Random Random { get; }
+
+        public BucketedData(IEnumerable<Tuple<int, int>> bucketSequenceLengths)
         {
-            Buckets = buckets.ToArray();
-            SourceLanguage = Enumerable.Range(0, Buckets.Length).Select(i => new List<int[]>()).ToArray();
-            TargetLanguage = Enumerable.Range(0, Buckets.Length).Select(i => new List<int[]>()).ToArray();
-            MaxSourceBucketSize = Buckets.Select(i => i.Item1).Max();
-            MaxTargetBucketSize = Buckets.Select(i => i.Item2).Max();
+            BucketSequenceLengths = bucketSequenceLengths.ToArray();
+            NumBuckets = BucketSequenceLengths.Length;
+            SourceLanguage = Enumerable.Range(0, BucketSequenceLengths.Length).Select(i => new List<int[]>()).ToArray();
+            TargetLanguage = Enumerable.Range(0, BucketSequenceLengths.Length).Select(i => new List<int[]>()).ToArray();
+            MaxSourceSequenceLength = BucketSequenceLengths.Select(i => i.Item1).Max();
+            MaxTargetSequenceLength = BucketSequenceLengths.Select(i => i.Item2).Max() - 2;
+            Random = new Random(0);
+        }
+
+        public static int[] PadSourceSequence(int[] indices, int paddedLength)
+        {
+            if (indices.Length > paddedLength)
+                throw new ArgumentException("input array too long");
+
+            var padded = new int[paddedLength];
+            Array.Copy(indices, padded, indices.Length);
+            for (var i = indices.Length; i < paddedLength; ++i)
+            {
+                padded[i] = Vocabulary.PadId;
+            }
+            return padded;
+        }
+
+        public static int[] PadTargetSequence(int[] indices, int paddedLength)
+        {
+            if (indices.Length > paddedLength - 2)
+                throw new ArgumentException("input array too long, need space for <go> at beginning and <eos> at end");
+
+            var padded = new int[paddedLength];
+            padded[0] = Vocabulary.GoId;
+            padded[indices.Length + 1] = Vocabulary.EosId;
+            Array.Copy(indices, 0, padded, 1, indices.Length);
+            for (var i = indices.Length + 2; i < paddedLength; ++i)
+            {
+                padded[i] = Vocabulary.PadId;
+            }
+            return padded;
         }
 
         public void Add(int[] source, int[] target)
         {
-            if (source.Length >= MaxSourceBucketSize || target.Length > MaxTargetBucketSize)
+            if (source.Length > MaxSourceSequenceLength || target.Length > MaxTargetSequenceLength)
             {
                 Skipped++;
                 return;
             }
-            for (var i = 0; i < Buckets.Length; ++i)
+            for (var i = 0; i < BucketSequenceLengths.Length; ++i)
             {
-                MaxSourceLength = Math.Max(MaxSourceLength, source.Length);
-                MaxTargetLength = Math.Max(MaxTargetLength, target.Length);
-                if (source.Length < Buckets[i].Item1 && target.Length < Buckets[i].Item2)
+                var sourceBucketLength = BucketSequenceLengths[i].Item1;
+                var targetBucketLength = BucketSequenceLengths[i].Item2;
+                if (source.Length <= sourceBucketLength && target.Length < targetBucketLength - 1)
                 {
-                    SourceLanguage[i].Add(source);
-                    TargetLanguage[i].Add(target);
+                    SourceLanguage[i].Add(PadSourceSequence(source, sourceBucketLength));
+                    TargetLanguage[i].Add(PadTargetSequence(target, targetBucketLength));
                     break;
                 }
             }
+        }
+
+
+    }
+
+    public class BuckateDataBatcher
+    {
+        public Random Random { get; }
+
+        public BucketedData Data { get; }
+
+        public double[] CumulativeProbabilities { get; }
+
+        public int BatchSize { get; }
+
+        public BuckateDataBatcher(BucketedData data, int batchSize, Random random)
+        {
+            Random = random;
+            Data = data;
+            BatchSize = batchSize;
+            var sizes = data.BucketSizes;
+            var total = (double)data.NumDataPoints;
+            CumulativeProbabilities = new double[data.NumBuckets];
+            CumulativeProbabilities[0] = sizes[0]/total;
+            for (var i = 1; i < data.NumBuckets; ++i)
+                CumulativeProbabilities[i] = CumulativeProbabilities[i - 1] + sizes[i]/total;
+        }
+
+        public class Batch
+        {
+            public int[,] Source { get; set; }
+            public int[,] Target { get; set; }
+            public int[,] Mask { get; set; }
+        }
+
+        public Batch SampleNewBatch(int bucketId)
+        {
+            var bucketSize = Data.SourceLanguage[bucketId].Count;
+            var sourceSequenceLength = Data.BucketSequenceLengths[bucketId].Item1;
+            var targetSequenceLength = Data.BucketSequenceLengths[bucketId].Item2;
+            var sourceLanguage = Data.SourceLanguage[bucketId];
+            var targetLanguage = Data.TargetLanguage[bucketId];
+
+            var source = new int[sourceSequenceLength, BatchSize];
+            var target = new int[targetSequenceLength, BatchSize];
+            var mask = new int[targetSequenceLength, BatchSize];
+            for (var i = 0; i < BatchSize; ++i)
+            {
+                var choice = Random.Next(bucketSize);
+                for (var t = 0; t < sourceSequenceLength; ++t)
+                {
+                    source[t, i] = sourceLanguage[choice][t];
+                }
+                for (var t = 0; t < targetSequenceLength; ++t)
+                {
+                    target[t, i] = targetLanguage[choice][t];
+                    if (target[t, i] == Vocabulary.PadId)
+                        mask[t, i] = 0;
+                    else
+                        mask[t, i] = 1;
+                }
+            }
+
+            return new Batch() { Source = source, Target = target, Mask = mask};
+        }
+
+        public Batch SampleNewBatch()
+        {
+            var random = Random.NextDouble();
+            int bucketId;
+            for (bucketId = 0; bucketId < Data.NumBuckets - 1; bucketId++)
+            {
+                if (random <= CumulativeProbabilities[bucketId]) break;
+            }
+            return SampleNewBatch(bucketId);
+        }
+
+        public IEnumerable<Batch> Iterator(int numEpochs)
+        {
+            for (var i = 0; i < numEpochs; ++i)
+                yield return SampleNewBatch();
         }
     }
 
@@ -348,7 +465,7 @@ namespace AleaTKTest
         }
 
         public static void Preprocess(string trainingDataFilename, string testDataFilename, string trainingTokenizedFilename, string testTokenizedFilename, 
-            string vocabularyFilename, int maxVocabularySize = 100000, bool normalizeDigits = true)
+            string vocabularyFilename, int maxVocabularySize = 50000, bool normalizeDigits = true)
         {
             var vocabulary = CreateVocabulary(trainingDataFilename, maxVocabularySize, normalizeDigits);
             vocabulary.Item1.Save(vocabularyFilename);
@@ -357,15 +474,17 @@ namespace AleaTKTest
         }
 
         /// <summary>
-        /// Distribute data into different buckets according to their sequence length given in buckets. 
+        /// Tokenized sequences are read from the source and target language file. The sequences are 
+        /// distribute into different bucketSequenceLengths according to their sequence length. 
+        /// By default the data is padded to the bucket length and the target sequence is prepended with the go symbol id.
         /// </summary>
         /// <param name="sourceLanguage"></param>
         /// <param name="targetLanguage"></param>
-        /// <param name="buckets"></param>
+        /// <param name="bucketSequenceLengths"></param>
         /// <returns></returns>
-        public static BucketedData PrepareForTraining(string sourceLanguage, string targetLanguage, IEnumerable<Tuple<int, int>> buckets)
+        public static BucketedData BucketTokenizedData(string sourceLanguage, string targetLanguage, IEnumerable<Tuple<int, int>> bucketSequenceLengths)
         {
-            var bucketedData = new BucketedData(buckets);
+            var bucketedData = new BucketedData(bucketSequenceLengths);
 
             using (var file1 = new StreamReader(sourceLanguage, Encoding.UTF8, true))
             using (var file2 = new StreamReader(targetLanguage, Encoding.UTF8, true))
@@ -490,22 +609,27 @@ namespace AleaTKTest
         [Test]
         public static void TestBucketing()
         {
-            Tuple<int, int>[] buckets = { new Tuple<int, int>(10, 15), new Tuple<int, int>(20, 25), new Tuple<int, int>(40, 50) };
+            Tuple<int, int>[] buckets = { new Tuple<int, int>(10, 15), new Tuple<int, int>(20, 25), new Tuple<int, int>(40, 50), new Tuple<int, int>(50, 60) };
 
-            var bucketed = Data.PrepareForTraining(Data.Name("english_train.txt"), Data.Name("french_train.txt"), buckets);
+            var bucketed = Data.BucketTokenizedData(Data.Name("english_dev.txt"), Data.Name("french_dev.txt"), buckets);
 
-            Console.WriteLine($"{bucketed.MaxSourceLength}, {bucketed.MaxTargetLength}");
-            var bucketSizes = bucketed.BucketSizes.ToArray();
+            var bucketSizes = bucketed.BucketSizes;
+            var numDataPoints = bucketed.NumDataPoints;
             bucketSizes.Iter((b, i) => Console.Write($"{b}, "));
-            Console.WriteLine($"data points : {bucketSizes.Sum()}, skipped : {bucketed.Skipped} of total {bucketSizes.Sum() + bucketed.Skipped}");
+            Console.WriteLine($"data points : {numDataPoints}, skipped : {bucketed.Skipped} of total {numDataPoints + bucketed.Skipped}");
         }
 
         [Test]
-        public static void TestDisplayDev()
+        public static void TestBatching()
         {
-            var en = Data.Name(Path.Combine("dev-v2", "dev", "newstest2013.en"));
-            var fr = Data.Name(Path.Combine("dev-v2", "dev", "newstest2013.fr"));
-            Data.Display(en, fr, 1000);
+            Tuple<int, int>[] buckets = { new Tuple<int, int>(10, 15), new Tuple<int, int>(20, 25), new Tuple<int, int>(40, 50), new Tuple<int, int>(50, 60) };
+
+            var bucketed = Data.BucketTokenizedData(Data.Name("english_dev.txt"), Data.Name("french_dev.txt"), buckets);
+
+            var batcher = new BuckateDataBatcher(bucketed, 5, new Random(0));
+            var batch = batcher.SampleNewBatch();
+
+            batch.Source.AsTensor().Print();
         }
     }
 }
