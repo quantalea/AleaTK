@@ -304,6 +304,7 @@ namespace AleaTK.ML.Operator
             // W shape will be determined during initialization
             W = Parameter<T>();
 
+            // create variables for input hidden and cell state
             HX = Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
             CX = Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
             HY = Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
@@ -385,6 +386,7 @@ namespace AleaTK.ML.Operator
             executor.Context.Assign(h.Slice(0), hx);
             executor.Context.Assign(c.Slice(0), cx);
 
+            // iterate through the sequence one time step at a time
             for (var t = 0; t < seqLength; ++t)
             {
                 cell.Input = input.Slice(t);
@@ -402,8 +404,8 @@ namespace AleaTK.ML.Operator
             // copy output
             var hy = executor.GetTensor(HY, Shape.Create(HY.Shape.AsArray));
             var cy = executor.GetTensor(CY, Shape.Create(CY.Shape.AsArray));
-            executor.Context.Assign(hy, h.Slice(seqLength%2 == 0 ? 0 : 1).Reshape(hy.Shape.AsArray));
-            executor.Context.Assign(cy, c.Slice(seqLength%2 == 0 ? 0 : 1).Reshape(cy.Shape.AsArray));
+            executor.Context.Assign(hy, h.Slice(seqLength%2).Reshape(hy.Shape.AsArray));
+            executor.Context.Assign(cy, c.Slice(seqLength%2).Reshape(cy.Shape.AsArray));
         }
 
         public override void Backward(Executor executor)
@@ -456,8 +458,8 @@ namespace AleaTK.ML.Operator
             // copy output
             var dhx = executor.GetGradient(HX, Shape.Create(HX.Shape.AsArray));
             var dcx = executor.GetGradient(CX, Shape.Create(CX.Shape.AsArray));
-            executor.Context.Assign(dhx, dh.Slice(seqLength % 2 == 0 ? 0 : 1).Reshape(dhx.Shape.AsArray));
-            executor.Context.Assign(dcx, dc.Slice(seqLength % 2 == 0 ? 0 : 1).Reshape(dcx.Shape.AsArray));
+            executor.Context.Assign(dhx, dh.Slice(seqLength%2).Reshape(dhx.Shape.AsArray));
+            executor.Context.Assign(dcx, dc.Slice(seqLength%2).Reshape(dcx.Shape.AsArray));
         }
     }
 

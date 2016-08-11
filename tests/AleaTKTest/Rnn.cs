@@ -122,9 +122,8 @@ namespace AleaTKTest
 
                 dx1 = exe.GetGradient(lstm.X).ToArray3D();
                 dcx1 = exe.GetGradient(lstm.CX).Reshape(batchSize, hiddenSize).ToArray2D();
-                dhx1 = exe.GetGradient(lstm.HX).Reshape(batchSize, hiddenSize).ToArray2D();
-                // cudnn weight is 1D linear blob
-                dw1 = exe.GetGradient(lstm.W).ToArray();
+                dhx1 = exe.GetGradient(lstm.HX).Reshape(batchSize, hiddenSize).ToArray2D();            
+                dw1 = exe.GetGradient(lstm.W).ToArray(); // cuDNN weight is 1D linear blob
             }
 
             {
@@ -170,7 +169,7 @@ namespace AleaTKTest
         }
 
         [Test]
-        public static void RnnAgainstRnnIterated()
+        public static void RnnAgainstIteratedRnnCell()
         {
             var ctx = Context.GpuContext(0);
             var inputSize = 5;
@@ -184,7 +183,7 @@ namespace AleaTKTest
 
             var h0 = Context.CpuContext.Eval(RandomNormal<float>(Shape.Create(batchSize, hiddenSize))).ToArray2D();
             var c0 = Context.CpuContext.Eval(RandomNormal<float>(Shape.Create(batchSize, hiddenSize))).ToArray2D();
-            var dy = Context.CpuContext.Eval(RandomUniform<float>(-1, 1, Shape.Create(seqLength, batchSize, hiddenSize))).ToArray3D();
+            var dOUtput = Context.CpuContext.Eval(RandomUniform<float>(-1, 1, Shape.Create(seqLength, batchSize, hiddenSize))).ToArray3D();
 
             float[,,] y1, y2, dx1, dx2;
             float[,] cy1, cy2, hy1, hy2;
@@ -213,6 +212,16 @@ namespace AleaTKTest
                 y1 = exe.GetTensor(lstm.Y).ToArray3D();
                 cy1 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
                 hy1 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
+
+                exe.AssignGradientDirectly(lstm.Y, dOUtput.AsTensor());
+
+                exe.Backward();
+
+                dx1 = exe.GetGradient(lstm.X).ToArray3D();
+                dcx1 = exe.GetGradient(lstm.CX).Reshape(batchSize, hiddenSize).ToArray2D();
+                dhx1 = exe.GetGradient(lstm.HX).Reshape(batchSize, hiddenSize).ToArray2D();             
+                dw1 = exe.GetGradient(lstm.W).ToArray(); // cuDNN weight is 1D linear blob
+
             }
 
             {
@@ -233,17 +242,26 @@ namespace AleaTKTest
                 exe.Forward();
 
                 y2 = exe.GetTensor(lstm.Output).ToArray3D();
-                //cy1 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
-                //hy1 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
+                cy2 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
+                hy2 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
+
+                exe.AssignGradientDirectly(lstm.Output, dOUtput.AsTensor());
+
+                exe.Backward();
+
+                dx2 = exe.GetGradient(lstm.Output).ToArray3D();
+                dcx2 = exe.GetGradient(lstm.CX).Reshape(batchSize, hiddenSize).ToArray2D();
+                dhx2 = exe.GetGradient(lstm.HX).Reshape(batchSize, hiddenSize).ToArray2D();
+                dw2 = exe.GetGradient(lstm.W).ToArray();
             }
 
             AreClose(y1, y2, error);
-            //AreClose(cy1, cy2, error);
-            //AreClose(hy1, hy2, error);
-            //AreClose(dx1, dx2, error);
-            //AreClose(dcx1, dcx2, error);
-            //AreClose(dhx1, dhx2, error);
-            //AreClose(dw1, dw2, error);
+            AreClose(cy1, cy2, error);
+            AreClose(hy1, hy2, error);
+            //AreClose(dx1, dx2, error);  // bugbug
+            //AreClose(dcx1, dcx2, error); // bugbug
+            //AreClose(dhx1, dhx2, error); // bugbug
+            //AreClose(dw1, dw2, error); // bugbug 
         }
     }
 }
