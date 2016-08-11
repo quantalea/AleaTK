@@ -11,10 +11,10 @@ namespace AleaTKTest
         static void Main(string[] args)
         {
             //Rnn.RnnAgainstRnnDynamic();
-            //MachineTranslation.TestCreateVocabulary();
-            //MachineTranslation.Preprocess();
-            //MachineTranslation.BackTranslate();
-            MachineTranslation.TestBucketing();
+            //SequenceToSequenceTest.TestCreateVocabulary();
+            //SequenceToSequenceTest.Preprocess();
+            //SequenceToSequenceTest.BackTranslate();
+            SequenceToSequenceTest.TestBucketing();
         }
     }
 }

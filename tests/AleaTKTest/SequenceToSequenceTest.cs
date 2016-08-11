@@ -4,16 +4,21 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Net;
-using System.Security.Cryptography;
-using System.Security.Policy;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Alea;
 using AleaTK;
+using AleaTK.ML;
+using AleaTK.ML.Operator;
 using AleaTKTest;
 using AleaTKUtil;
 using ICSharpCode.SharpZipLib.Tar;
 using NUnit.Framework;
+using static AleaTK.Library;
+using static AleaTK.ML.Library;
+using static AleaTKUtil.Common;
+using Context = AleaTK.Context;
 
 namespace AleaTKTest
 {
@@ -507,7 +512,53 @@ namespace AleaTKTest
         }
     }
 
-    public static class MachineTranslation
+    public class Config
+    {
+        public double InitScale;
+        public double LearningRate;
+        public double MaxGradNorm;
+        public int NumLayers;
+        public int HiddenSize;
+        public int ReduceLearningRateAfterEpoch;     
+        public int NumEpochs;  
+        public double DropoutProbability;
+        public double LearningRateDecay;
+        public int BatchSize;
+        public int VocabularySize;
+    }
+
+    public class Model
+    {
+        public Model(Context ctx, int numInputSteps, Config cfg, bool isTraining = true)
+        {
+            var addDropout = isTraining && cfg.DropoutProbability > 0.0;
+
+            EncoderInputs = Variable<int>(PartialShape.Create(numInputSteps, cfg.BatchSize));
+            Embedding = new Embedding<float>(EncoderInputs, cfg.VocabularySize, cfg.HiddenSize, initScale: cfg.InitScale);
+
+            EmbeddingOutput = addDropout ? new Dropout<float>(Embedding.Output, cfg.DropoutProbability).Output : Embedding.Output;
+
+            var rnnType = new LstmRnnType();
+            EncoderRnn = new Rnn<float>(rnnType, EmbeddingOutput, cfg.NumLayers, cfg.HiddenSize, isTraining: isTraining, dropout: addDropout ? cfg.DropoutProbability : 0.0);
+            EncoderRnnOutput = addDropout ? new Dropout<float>(EncoderRnn.Y, cfg.DropoutProbability).Output : EncoderRnn.Y;
+
+            // attention model
+
+
+        }
+
+        public Variable<int> EncoderInputs { get; }
+
+        public Embedding<float> Embedding { get; }
+
+        public Variable<float> EmbeddingOutput { get; }
+
+        public Rnn<float> EncoderRnn { get; }
+
+        public Variable<float> EncoderRnnOutput { get; }
+    }
+
+    public static class SequenceToSequenceTest
     {
         [Test]
         public static void TestCaseData()
@@ -622,6 +673,8 @@ namespace AleaTKTest
         [Test]
         public static void TestBatching()
         {
+            Gpu.Get(0);
+
             Tuple<int, int>[] buckets = { new Tuple<int, int>(10, 15), new Tuple<int, int>(20, 25), new Tuple<int, int>(40, 50), new Tuple<int, int>(50, 60) };
 
             var bucketed = Data.BucketTokenizedData(Data.Name("english_dev.txt"), Data.Name("french_dev.txt"), buckets);
@@ -630,6 +683,8 @@ namespace AleaTKTest
             var batch = batcher.SampleNewBatch();
 
             batch.Source.AsTensor().Print();
+            batch.Target.AsTensor().Print();
+            batch.Mask.AsTensor().Print();
         }
     }
 }
