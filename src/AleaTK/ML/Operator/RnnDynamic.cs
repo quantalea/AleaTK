@@ -15,7 +15,6 @@ namespace AleaTK.ML.Operator
         /// </summary>
         public Tensor<T> Input { get; set; }
         public Tensor<T> DInput { get; set; }
-
         public Tensor<T> Output { get; set; }
         public Tensor<T> DOutput { get; set; }
 
@@ -116,7 +115,7 @@ namespace AleaTK.ML.Operator
             if (isTraining) executor.GetGradient(W, shapeW);
         }
 
-        void Initialize(Executor executor)
+        public void Initialize(Executor executor)
         {
             var context = executor.Context.ToGpuContext();
             var dnn = context.Dnn;
@@ -167,7 +166,7 @@ namespace AleaTK.ML.Operator
             }
         }
 
-        void Forward(Executor executor)
+        public void Forward(Executor executor)
         {
             var context = executor.Context.ToGpuContext();
             var dnn = context.Dnn;
@@ -201,7 +200,7 @@ namespace AleaTK.ML.Operator
             }
         }
 
-        void Backward(Executor executor)
+        public void Backward(Executor executor)
         {
             var context = executor.Context.ToGpuContext();
             var dnn = context.Dnn;
@@ -258,6 +257,172 @@ namespace AleaTK.ML.Operator
                 executor.GetGradient(W).Buffer.Ptr,
                 executor.GetTensor(ReserveSpace).Buffer.Ptr,
                 (IntPtr)executor.GetTensor(ReserveSpace).Shape.Length);
+        }
+    }
+
+    public class IteratedRnnCell<T> : Differentiable
+    {
+        public RnnType RnnType { get; }
+        public bool IsTraining { get; }
+        public int InputSize { get; }
+        public int BatchSize { get; }
+        public int HiddenSize { get; }
+        public int NumLayers { get; }
+        public double DropoutProbability { get; }
+        public ulong DropoutSeed { get; }
+
+        public Variable<T> Input { get; }
+        public Variable<T> Output { get; }
+        public Variable<T> W { get; }
+        public Variable<T> H { get; }
+        public Variable<T> C { get; }
+        public Variable<T> DH { get; }
+        public Variable<T> DC { get; }
+
+        public readonly Symbol RnnCellDescr = new Symbol();
+
+        public IteratedRnnCell(Variable<T> input, RnnType rnnRnnType, int hiddenSize, int numLayers, bool isTraining, double dropoutProbability, ulong dropoutSeed = 1337UL)
+        {
+            RnnType = rnnRnnType;
+            IsTraining = isTraining;
+            NumLayers = numLayers;
+            HiddenSize = hiddenSize;
+            DropoutProbability = isTraining ? dropoutProbability : 0.0;
+            DropoutSeed = dropoutSeed;
+
+            Util.EnsureEqual(3, input.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
+            Util.EnsureTrue(input.Shape[1] >= 0, "Input layout: (seqLength, batch, inputSize)");
+            Util.EnsureTrue(input.Shape[2] >= 0, "Input layout: (seqLength, batch, inputSize)");
+            Input = input;
+            BatchSize = (int)input.Shape[1];
+            InputSize = (int)input.Shape[2];
+
+            // output Shape (seqLength, not yet known, hiddenSize)
+            Output = Variable<T>(PartialShape.Create(-1, -1, HiddenSize));
+
+            // W shape will be determined during initialization
+            W = Parameter<T>();
+
+            // state variables HX = H(0,:,:,:), HY = H(1,:,:,:)
+            var shape = PartialShape.Create(2, NumLayers, -1, HiddenSize);
+            H = Variable<T>(shape);
+            C = Variable<T>(shape);
+            DH = Variable<T>(shape);
+            DC = Variable<T>(shape);
+
+            // construct the graph
+            AddInput(Input);
+            AddInput(W);
+            AddOutput(Output);
+            AddAuxVar(H);
+            AddAuxVar(C);
+            AddAuxVar(DH);
+            AddAuxVar(DC);
+        }
+
+        public override void Initialize(Executor executor)
+        {
+            var context = executor.Context.ToGpuContext();
+            var dnn = context.Dnn;
+
+            var cell = new RnnCell<T>(executor, RnnType, W, InputSize, BatchSize, HiddenSize, NumLayers, IsTraining, DropoutProbability, DropoutSeed);
+            executor.Objects[RnnCellDescr] = cell;
+
+            cell.Initialize(executor);
+
+            base.Initialize(executor);
+        }
+
+        public void AssignInitialStates(Executor executor, Tensor<T> hx, Tensor<T> cx)
+        {
+            var shape = Shape.Create(2, NumLayers, BatchSize, HiddenSize);
+            executor.Context.Assign(executor.GetTensor(H, shape).Slice(0), hx);
+            executor.Context.Assign(executor.GetTensor(C, shape).Slice(0), cx);
+        }
+
+        public void AssignTerminalGradient(Executor executor, Tensor<T> dhy, Tensor<T> dcy)
+        {
+            var shape = Shape.Create(2, NumLayers, BatchSize, HiddenSize);
+            executor.Context.Assign(executor.GetTensor(DH, shape).Slice(0), dhy);
+            executor.Context.Assign(executor.GetTensor(DC, shape).Slice(0), dcy);
+        }
+
+        public void ZeroInitialStates(Executor executor)
+        {
+            executor.AssignTensor(H, Fill(Shape.Create(H.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignTensor(C, Fill(Shape.Create(C.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+        }
+
+        public void ZeroTerminalGradient(Executor executor)
+        {
+            executor.AssignTensor(DH, Fill(Shape.Create(H.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignTensor(DC, Fill(Shape.Create(C.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+        }
+
+        public override void Forward(Executor executor)
+        {
+            var cell = (RnnCell<T>) executor.Objects[RnnCellDescr];
+
+            var input = executor.GetTensor(Input);
+            var output = executor.GetTensor(Output, input.Shape);
+
+            var shape = Shape.Create(2, NumLayers, BatchSize, HiddenSize);
+            var h = executor.GetTensor(H, shape);
+            var c = executor.GetTensor(C, shape);
+
+            var seqLength = (int)Input.Shape[0];
+
+            for (var t = 0; t < seqLength; ++t)
+            {
+                cell.Input = input.Slice(t);
+                cell.Output = output.Slice(t);
+
+                var i = t % 2;
+                cell.HX = h.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
+                cell.HY = h.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
+                cell.CX = c.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
+                cell.CY = c.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
+
+                cell.Forward(executor);
+            }
+        }
+
+        public override void Backward(Executor executor)
+        {
+            var cell = (RnnCell<T>)executor.Objects[RnnCellDescr];
+
+            var input = executor.GetTensor(Input);
+            var output = executor.GetTensor(Output, input.Shape);
+            var dInput = executor.GetGradient(Input, input.Shape);
+            var dOutput = executor.GetGradient(Output, input.Shape);
+
+            var shape = Shape.Create(2, NumLayers, BatchSize, HiddenSize);
+            var h = executor.GetTensor(H, shape);
+            var c = executor.GetTensor(C, shape);
+            var dh = executor.GetTensor(DH, shape);
+            var dc = executor.GetTensor(DC, shape);
+
+            var seqLength = (int)Input.Shape[0];
+
+            for (var t = seqLength - 1; t >= 0; --t)
+            {
+                cell.Input = input.Slice(t);
+                cell.Output = output.Slice(t);
+                cell.DOutput = dOutput.Slice(t);
+                cell.DInput = dInput.Slice(t);
+
+                var i = (seqLength - 1 - t) % 2;
+                cell.HX = h.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
+                cell.HY = h.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
+                cell.CX = c.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
+                cell.CY = c.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
+                cell.DHX = dh.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
+                cell.DHY = dh.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
+                cell.DCX = dc.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
+                cell.DCY = dc.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
+
+                cell.Backward(executor);
+            }
         }
     }
 
@@ -355,9 +520,9 @@ namespace AleaTK.ML.Operator
     /// </summary>
     public class RnnDynamic<T> : Differentiable
     {
-        public RnnDynamic(RnnType ty, Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, ulong dropoutSeed = 1337UL)
+        public RnnDynamic(RnnType rnnRnnType, Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, ulong dropoutSeed = 1337UL)
         {
-            Type = ty;
+            RnnType = rnnRnnType;
             IsTraining = isTraining;
             NumLayers = numLayers;
             HiddenSize = hiddenSize;
@@ -396,7 +561,7 @@ namespace AleaTK.ML.Operator
             AddAuxVar(ReserveSpace);
         }
 
-        public RnnType Type { get; }
+        public RnnType RnnType { get; }
 
         public bool IsTraining { get; }
 
@@ -452,7 +617,7 @@ namespace AleaTK.ML.Operator
 
             // rnn descriptor
             var rnnDesc = executor.RnnDescDict[RnnDesc];
-            var mode = Type.Mode;
+            var mode = RnnType.Mode;
             rnnDesc.Set(HiddenSize, NumLayers, dropoutDesc, RNNInputMode.LINEAR_INPUT, DirectionMode.UNIDIRECTIONAL, mode, Dnn.DataTypeOf<T>());
 
             // initialize weight, once only, using minibatch size 1
@@ -472,7 +637,7 @@ namespace AleaTK.ML.Operator
             if (IsTraining) executor.GetGradient(W, shapeW);
 
             // init weights
-            var numLinearLayers = Type.NumLinLayers;
+            var numLinearLayers = RnnType.NumLinLayers;
 
             using (var filterDesc = new FilterDescriptor())
             {
@@ -505,7 +670,7 @@ namespace AleaTK.ML.Operator
 
                         var linLayerBiasBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)), linLayerBias);
                         var linLayerBiasTensor = new Tensor<T>(linLayerBiasBuffer);
-                        Type.InitBias(context, layer, linLayerId, linLayerBiasTensor);
+                        RnnType.InitBias(context, layer, linLayerId, linLayerBiasTensor);
                     }
                 }
             }
