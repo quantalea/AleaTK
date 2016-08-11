@@ -297,14 +297,14 @@ namespace AleaTK.ML.Operator
             BatchSize = (int)input.Shape[1];
             InputSize = (int)input.Shape[2];
 
-            // output Shape (seqLength, not yet known, hiddenSize)
-            Output = Variable<T>(PartialShape.Create(-1, -1, HiddenSize));
+            // output Shape (seqLength, batchSize, hiddenSize)
+            Output = Variable<T>(PartialShape.Create(-1, BatchSize, HiddenSize));
 
             // W shape will be determined during initialization
             W = Parameter<T>();
 
             // state variables HX = H(0,:,:,:), HY = H(1,:,:,:)
-            var shape = PartialShape.Create(2, NumLayers, -1, HiddenSize);
+            var shape = PartialShape.Create(2, NumLayers, BatchSize, HiddenSize);
             H = Variable<T>(shape);
             C = Variable<T>(shape);
             DH = Variable<T>(shape);
@@ -322,9 +322,6 @@ namespace AleaTK.ML.Operator
 
         public override void Initialize(Executor executor)
         {
-            var context = executor.Context.ToGpuContext();
-            var dnn = context.Dnn;
-
             var cell = new RnnCell<T>(executor, RnnType, W, InputSize, BatchSize, HiddenSize, NumLayers, IsTraining, DropoutProbability, DropoutSeed);
             executor.Objects[RnnCellDescr] = cell;
 
@@ -363,14 +360,16 @@ namespace AleaTK.ML.Operator
         {
             var cell = (RnnCell<T>) executor.Objects[RnnCellDescr];
 
+            // input should be allocated by the training procedure
             var input = executor.GetTensor(Input);
-            var output = executor.GetTensor(Output, input.Shape);
+            var seqLength = input.Shape[0];
+
+            // output is the output of this op, so we need give shape to allocate it
+            var output = executor.GetTensor(Output, Shape.Create(seqLength, BatchSize, HiddenSize));
 
             var shape = Shape.Create(2, NumLayers, BatchSize, HiddenSize);
             var h = executor.GetTensor(H, shape);
             var c = executor.GetTensor(C, shape);
-
-            var seqLength = (int)Input.Shape[0];
 
             for (var t = 0; t < seqLength; ++t)
             {
@@ -391,10 +390,13 @@ namespace AleaTK.ML.Operator
         {
             var cell = (RnnCell<T>)executor.Objects[RnnCellDescr];
 
+            // input and output should be there, cause this is backward()
             var input = executor.GetTensor(Input);
-            var output = executor.GetTensor(Output, input.Shape);
+            var output = executor.GetTensor(Output);
+
+            // dOutput should be allocated by the child op, but dInput should be allocated by us
             var dInput = executor.GetGradient(Input, input.Shape);
-            var dOutput = executor.GetGradient(Output, input.Shape);
+            var dOutput = executor.GetGradient(Output);
 
             var shape = Shape.Create(2, NumLayers, BatchSize, HiddenSize);
             var h = executor.GetTensor(H, shape);
