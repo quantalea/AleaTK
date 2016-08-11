@@ -30,17 +30,18 @@ namespace AleaTK.ML.Operator
         public Tensor<T> CY { get; set; }
         public Tensor<T> DCY { get; set; }
 
-        public TensorDescriptor StateDesc { get; }
+        public TensorDescriptor StateDesc { get; } = new TensorDescriptor();
         public TensorDescriptor[] XDesc { get; }
         public TensorDescriptor[] YDesc { get; }
         public Variable<T> W { get; }
 
-        public readonly Variable<byte> DropoutStates = Library.AuxVariable<byte>();
-        public readonly Variable<byte> Workspace = Library.AuxVariable<byte>();
-        public readonly Variable<byte> ReserveSpace = Library.AuxVariable<byte>();
-        public readonly Symbol DropoutDesc = new Symbol();
-        public readonly Symbol WDesc = new Symbol();
-        public readonly Symbol RnnDesc = new Symbol();
+        public Tensor<byte> DropoutStates { get; }
+        public Tensor<byte> Workspace { get; }
+        public Tensor<byte> ReserveSpace { get; }
+
+        public DropoutDescriptor DropoutDesc { get; } = new DropoutDescriptor();
+        public FilterDescriptor WDesc { get; } = new FilterDescriptor();
+        public RNNDescriptor RnnDesc { get; } = new RNNDescriptor();
 
         public bool IsTraining { get; }
         public int BatchSize { get; }
@@ -66,7 +67,6 @@ namespace AleaTK.ML.Operator
             // state variables
             var shape = Shape.Create(numLayers, batch, hiddenSize);
             var strides = Strides.Create(shape[1]*shape[2], shape[2], 1); // inner change most
-            StateDesc = new TensorDescriptor();
             StateDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
 
             // xDesc is an array of one element because we do only one step
@@ -83,33 +83,30 @@ namespace AleaTK.ML.Operator
             yDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
             YDesc = Enumerable.Repeat(yDesc, 1).ToArray();
 
-            var dropoutDesc = executor.DropoutDescDict[DropoutDesc];
             IntPtr dropoutStatesSize;
             dnn.DropoutGetStatesSize(out dropoutStatesSize);
-            var dropoutStates = executor.GetTensor(DropoutStates, Shape.Create(dropoutStatesSize.ToInt64()));
-            dropoutDesc.Set(dnn, (float) dropoutProbability, dropoutStates.Buffer.Ptr, dropoutStatesSize, dropoutSeed);
+            DropoutStates = executor.Context.Device.Allocate<byte>(Shape.Create(dropoutStatesSize.ToInt64()));
+            DropoutDesc.Set(dnn, (float) dropoutProbability, DropoutStates.Buffer.Ptr, dropoutStatesSize, dropoutSeed);
 
-            var rnnDesc = executor.RnnDescDict[RnnDesc];
             var mode = rnnType.Mode;
-            rnnDesc.Set(hiddenSize, numLayers, dropoutDesc, RNNInputMode.LINEAR_INPUT, DirectionMode.UNIDIRECTIONAL, mode, Dnn.DataTypeOf<T>());
+            RnnDesc.Set(hiddenSize, numLayers, DropoutDesc, RNNInputMode.LINEAR_INPUT, DirectionMode.UNIDIRECTIONAL, mode, Dnn.DataTypeOf<T>());
 
             IntPtr workSize;
-            dnn.GetRNNWorkspaceSize(rnnDesc, 1, XDesc, out workSize);
-            executor.GetTensor(Workspace, Shape.Create(workSize.ToInt64()));
+            dnn.GetRNNWorkspaceSize(RnnDesc, 1, XDesc, out workSize);
+            Workspace = executor.Context.Device.Allocate<byte>(Shape.Create(workSize.ToInt64()));
 
             if (isTraining)
             {
                 IntPtr reserveSize;
-                dnn.GetRNNTrainingReserveSize(rnnDesc, 1, XDesc, out reserveSize);
-                executor.GetTensor(ReserveSpace, Shape.Create(reserveSize.ToInt64()));
+                dnn.GetRNNTrainingReserveSize(RnnDesc, 1, XDesc, out reserveSize);
+                ReserveSpace = executor.Context.Device.Allocate<byte>(Shape.Create(reserveSize.ToInt64()));
             }
 
-            var wDesc = executor.FilterDescDict[WDesc];
             IntPtr weightsSize;
-            dnn.GetRNNParamsSize(rnnDesc, xDesc, out weightsSize, Dnn.DataTypeOf<T>());
+            dnn.GetRNNParamsSize(RnnDesc, xDesc, out weightsSize, Dnn.DataTypeOf<T>());
             Util.EnsureTrue(weightsSize.ToInt64()%Gpu.SizeOf<T>() == 0);
             var shapeW = Shape.Create(weightsSize.ToInt64()/Alea.Gpu.SizeOf<T>());
-            wDesc.SetND(Dnn.DataTypeOf<T>(), TensorFormat.CUDNN_TENSOR_NCHW, new[] {(int) shapeW[0], 1, 1});
+            WDesc.SetND(Dnn.DataTypeOf<T>(), TensorFormat.CUDNN_TENSOR_NCHW, new[] {(int) shapeW[0], 1, 1});
 
             executor.GetTensor(W, shapeW);
             if (isTraining) executor.GetGradient(W, shapeW);
@@ -120,8 +117,8 @@ namespace AleaTK.ML.Operator
             var context = executor.Context.ToGpuContext();
             var dnn = context.Dnn;
 
-            var rnnDesc = executor.RnnDescDict[RnnDesc];
-            var wDesc = executor.FilterDescDict[WDesc];
+            var rnnDesc = RnnDesc;
+            var wDesc = WDesc;
 
             // init weights
             using (var filterDesc = new FilterDescriptor())
@@ -170,19 +167,19 @@ namespace AleaTK.ML.Operator
         {
             var context = executor.Context.ToGpuContext();
             var dnn = context.Dnn;
-            var rnnDesc = executor.RnnDescDict[RnnDesc];
+            var rnnDesc = RnnDesc;
 
             var hxDesc = StateDesc;
             var cxDesc = StateDesc;
             var hyDesc = StateDesc;
             var cyDesc = StateDesc;
-            var wDesc = executor.FilterDescDict[WDesc];
+            var wDesc = WDesc;
             var w = executor.GetTensor(W);
-            var workspace = executor.GetTensor(Workspace);
+            var workspace = Workspace;
 
             if (IsTraining)
             {
-                var reserveSpace = executor.GetTensor(ReserveSpace);
+                var reserveSpace = ReserveSpace;
                 dnn.RNNForwardTraining(
                     rnnDesc, 1, XDesc, Input.Buffer.Ptr, hxDesc, HX.Buffer.Ptr,
                     cxDesc, CX.Buffer.Ptr, wDesc, w.Buffer.Ptr, YDesc, Output.Buffer.Ptr,
@@ -204,8 +201,8 @@ namespace AleaTK.ML.Operator
         {
             var context = executor.Context.ToGpuContext();
             var dnn = context.Dnn;
-            var rnnDesc = executor.RnnDescDict[RnnDesc];
-            var filterDesc = executor.FilterDescDict[WDesc];
+            var rnnDesc = RnnDesc;
+            var filterDesc = WDesc;
 
             Util.EnsureTrue(IsTraining);
 
@@ -232,10 +229,10 @@ namespace AleaTK.ML.Operator
                 DHX.Buffer.Ptr,
                 StateDesc,
                 DCX.Buffer.Ptr,
-                executor.GetTensor(Workspace).Buffer.Ptr,
-                (IntPtr)executor.GetTensor(Workspace).Shape.Length,
-                executor.GetTensor(ReserveSpace).Buffer.Ptr,
-                (IntPtr)executor.GetTensor(ReserveSpace).Shape.Length);
+                Workspace.Buffer.Ptr,
+                (IntPtr)Workspace.Shape.Length,
+                ReserveSpace.Buffer.Ptr,
+                (IntPtr)ReserveSpace.Shape.Length);
 
             if (executor.GetData(W).GradientAggregationCounter == 0)
             {
@@ -251,12 +248,12 @@ namespace AleaTK.ML.Operator
                 HX.Buffer.Ptr,
                 YDesc,
                 Output.Buffer.Ptr,
-                executor.GetTensor(Workspace).Buffer.Ptr,
-                (IntPtr)executor.GetTensor(Workspace).Shape.Length,
-                executor.FilterDescDict[WDesc],
+                Workspace.Buffer.Ptr,
+                (IntPtr)Workspace.Shape.Length,
+                WDesc,
                 executor.GetGradient(W).Buffer.Ptr,
-                executor.GetTensor(ReserveSpace).Buffer.Ptr,
-                (IntPtr)executor.GetTensor(ReserveSpace).Shape.Length);
+                ReserveSpace.Buffer.Ptr,
+                (IntPtr)ReserveSpace.Shape.Length);
         }
     }
 
@@ -274,6 +271,10 @@ namespace AleaTK.ML.Operator
         public Variable<T> Input { get; }
         public Variable<T> Output { get; }
         public Variable<T> W { get; }
+        public Variable<T> HX { get; }
+        public Variable<T> CX { get; }
+        public Variable<T> HY { get; }
+        public Variable<T> CY { get; }
         public Variable<T> H { get; }
         public Variable<T> C { get; }
         public Variable<T> DH { get; }
@@ -303,6 +304,11 @@ namespace AleaTK.ML.Operator
             // W shape will be determined during initialization
             W = Parameter<T>();
 
+            HX = Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
+            CX = Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
+            HY = Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
+            CY = Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
+
             // state variables HX = H(0,:,:,:), HY = H(1,:,:,:)
             var shape = PartialShape.Create(2, NumLayers, BatchSize, HiddenSize);
             H = Variable<T>(shape);
@@ -314,6 +320,10 @@ namespace AleaTK.ML.Operator
             AddInput(Input);
             AddInput(W);
             AddOutput(Output);
+            AddAuxVar(HX);
+            AddAuxVar(CX);
+            AddAuxVar(HY);
+            AddAuxVar(CY);
             AddAuxVar(H);
             AddAuxVar(C);
             AddAuxVar(DH);
@@ -332,28 +342,26 @@ namespace AleaTK.ML.Operator
 
         public void AssignInitialStates(Executor executor, Tensor<T> hx, Tensor<T> cx)
         {
-            var shape = Shape.Create(2, NumLayers, BatchSize, HiddenSize);
-            executor.Context.Assign(executor.GetTensor(H, shape).Slice(0), hx);
-            executor.Context.Assign(executor.GetTensor(C, shape).Slice(0), cx);
+            executor.AssignTensor(HX, hx);
+            executor.AssignTensor(CX, cx);
         }
 
         public void AssignTerminalGradient(Executor executor, Tensor<T> dhy, Tensor<T> dcy)
         {
-            var shape = Shape.Create(2, NumLayers, BatchSize, HiddenSize);
-            executor.Context.Assign(executor.GetTensor(DH, shape).Slice(0), dhy);
-            executor.Context.Assign(executor.GetTensor(DC, shape).Slice(0), dcy);
+            executor.AssignGradientDirectly(HY, dhy);
+            executor.AssignGradientDirectly(CY, dcy);
         }
 
         public void ZeroInitialStates(Executor executor)
         {
-            executor.AssignTensor(H, Fill(Shape.Create(H.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
-            executor.AssignTensor(C, Fill(Shape.Create(C.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignTensor(HX, Fill(Shape.Create(HX.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignTensor(CX, Fill(Shape.Create(CX.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
         }
 
         public void ZeroTerminalGradient(Executor executor)
         {
-            executor.AssignTensor(DH, Fill(Shape.Create(H.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
-            executor.AssignTensor(DC, Fill(Shape.Create(C.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignGradientDirectly(HY, Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignGradientDirectly(CY, Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
         }
 
         public override void Forward(Executor executor)
@@ -371,6 +379,12 @@ namespace AleaTK.ML.Operator
             var h = executor.GetTensor(H, shape);
             var c = executor.GetTensor(C, shape);
 
+            // copy cx and hx
+            var hx = executor.GetTensor(HX);
+            var cx = executor.GetTensor(CX);
+            executor.Context.Assign(h.Slice(0), hx);
+            executor.Context.Assign(c.Slice(0), cx);
+
             for (var t = 0; t < seqLength; ++t)
             {
                 cell.Input = input.Slice(t);
@@ -384,6 +398,12 @@ namespace AleaTK.ML.Operator
 
                 cell.Forward(executor);
             }
+
+            // copy output
+            var hy = executor.GetTensor(HY, Shape.Create(HY.Shape.AsArray));
+            var cy = executor.GetTensor(CY, Shape.Create(CY.Shape.AsArray));
+            executor.Context.Assign(hy, h.Slice(seqLength%2 == 0 ? 0 : 1).Reshape(hy.Shape.AsArray));
+            executor.Context.Assign(cy, c.Slice(seqLength%2 == 0 ? 0 : 1).Reshape(cy.Shape.AsArray));
         }
 
         public override void Backward(Executor executor)
@@ -403,6 +423,13 @@ namespace AleaTK.ML.Operator
             var c = executor.GetTensor(C, shape);
             var dh = executor.GetTensor(DH, shape);
             var dc = executor.GetTensor(DC, shape);
+
+            var dhy = executor.GetGradient(HY, Shape.Create(HY.Shape.AsArray));
+            var dcy = executor.GetGradient(CY, Shape.Create(CY.Shape.AsArray));
+            executor.Context.Assign(dh.Slice(0), dhy);
+            executor.Context.Assign(dc.Slice(0), dcy);
+
+            // TODO: should we copy hy and cy? if the swap is correct, we can avoid this.
 
             var seqLength = (int)Input.Shape[0];
 
@@ -425,6 +452,12 @@ namespace AleaTK.ML.Operator
 
                 cell.Backward(executor);
             }
+
+            // copy output
+            var dhx = executor.GetGradient(HX, Shape.Create(HX.Shape.AsArray));
+            var dcx = executor.GetGradient(CX, Shape.Create(CX.Shape.AsArray));
+            executor.Context.Assign(dhx, dh.Slice(seqLength % 2 == 0 ? 0 : 1).Reshape(dhx.Shape.AsArray));
+            executor.Context.Assign(dcx, dc.Slice(seqLength % 2 == 0 ? 0 : 1).Reshape(dcx.Shape.AsArray));
         }
     }
 
