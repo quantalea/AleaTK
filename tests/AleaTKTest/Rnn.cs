@@ -233,7 +233,17 @@ namespace AleaTKTest
                 exe.Forward();
 
                 y2 = exe.GetTensor(lstm.Output).ToArray3D();
+                //cy1 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
+                //hy1 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
             }
+
+            AreClose(y1, y2, error);
+            //AreClose(cy1, cy2, error);
+            //AreClose(hy1, hy2, error);
+            //AreClose(dx1, dx2, error);
+            //AreClose(dcx1, dcx2, error);
+            //AreClose(dhx1, dhx2, error);
+            //AreClose(dw1, dw2, error);
         }
     }
 }
