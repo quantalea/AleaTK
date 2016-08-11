@@ -558,7 +558,7 @@ namespace AleaTKTest
         public Variable<float> EncoderRnnOutput { get; }
     }
 
-    public static class SequenceToSequenceTest
+    public static class SeqToSeqTest
     {
         [Test]
         public static void TestCaseData()

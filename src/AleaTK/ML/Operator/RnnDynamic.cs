@@ -281,7 +281,7 @@ namespace AleaTK.ML.Operator
 
         public readonly Symbol RnnCellDescr = new Symbol();
 
-        public IteratedRnnCell(Variable<T> input, RnnType rnnRnnType, int hiddenSize, int numLayers, bool isTraining, double dropoutProbability, ulong dropoutSeed = 1337UL)
+        public IteratedRnnCell(RnnType rnnRnnType, Variable<T> input, int numLayers, int hiddenSize, bool isTraining, double dropoutProbability, ulong dropoutSeed = 1337UL)
         {
             RnnType = rnnRnnType;
             IsTraining = isTraining;

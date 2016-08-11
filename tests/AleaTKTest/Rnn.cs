@@ -107,7 +107,7 @@ namespace AleaTKTest
                 exe.AssignTensor(lstm.HX, h0.AsTensor(Shape.Create(1, batchSize, hiddenSize)));
 
                 // set weigths, cuDNN matrices order: IFAO
-                var w = exe.GetTensor(lstm.W).Reshape(inputSize * 4 + hiddenSize * 4 + 2 * 4, hiddenSize);
+                var w = exe.GetTensor(lstm.W).Reshape(inputSize*4 + hiddenSize*4 + 2*4, hiddenSize);
                 SetWeights(ctx, w, inputSize, hiddenSize);
 
                 exe.Forward();
@@ -141,7 +141,7 @@ namespace AleaTKTest
                 exe.AssignTensor(lstm.HX, h0.AsTensor(Shape.Create(1, batchSize, hiddenSize)));
 
                 // set weigths, cuDNN matrices order: IFAO
-                var w = exe.GetTensor(lstm.W).Reshape(inputSize * 4 + hiddenSize * 4 + 2 * 4, hiddenSize);
+                var w = exe.GetTensor(lstm.W).Reshape(inputSize*4 + hiddenSize*4 + 2*4, hiddenSize);
                 SetWeights(ctx, w, inputSize, hiddenSize);
 
                 exe.Forward();
@@ -167,6 +167,73 @@ namespace AleaTKTest
             AreClose(dcx1, dcx2, error);
             AreClose(dhx1, dhx2, error);
             AreClose(dw1, dw2, error);
+        }
+
+        [Test]
+        public static void RnnAgainstRnnIterated()
+        {
+            var ctx = Context.GpuContext(0);
+            var inputSize = 5;
+            var seqLength = 3;
+            var batchSize = 2;
+            var hiddenSize = 4;
+            var error = 1e-5;
+
+            var data = Context.CpuContext.Eval(RandomUniform<float>(-1, 1, Shape.Create(seqLength, batchSize, inputSize))).ToArray3D();
+            data.AsTensor(Shape.Create(seqLength*batchSize, inputSize)).Print();
+
+            var h0 = Context.CpuContext.Eval(RandomNormal<float>(Shape.Create(batchSize, hiddenSize))).ToArray2D();
+            var c0 = Context.CpuContext.Eval(RandomNormal<float>(Shape.Create(batchSize, hiddenSize))).ToArray2D();
+            var dy = Context.CpuContext.Eval(RandomUniform<float>(-1, 1, Shape.Create(seqLength, batchSize, hiddenSize))).ToArray3D();
+
+            float[,,] y1, y2, dx1, dx2;
+            float[,] cy1, cy2, hy1, hy2;
+            float[,] dcx1, dcx2, dhx1, dhx2;
+            float[] dw1, dw2;
+
+            {
+                var x = Variable<float>(PartialShape.Create(seqLength, batchSize, inputSize));
+                var lstm = new Rnn<float>(new LstmRnnType(), x, 1, hiddenSize, dropout: 0.0);
+                var exe = new Executor(ctx, lstm.Y);
+                exe.Initalize();
+
+                // set input
+                exe.AssignTensor(lstm.X, data.AsTensor());
+
+                // set states
+                exe.AssignTensor(lstm.CX, c0.AsTensor(Shape.Create(1, batchSize, hiddenSize)));
+                exe.AssignTensor(lstm.HX, h0.AsTensor(Shape.Create(1, batchSize, hiddenSize)));
+
+                // set weigths, cuDNN matrices order: IFAO
+                var w = exe.GetTensor(lstm.W).Reshape(inputSize * 4 + hiddenSize * 4 + 2 * 4, hiddenSize);
+                SetWeights(ctx, w, inputSize, hiddenSize);
+
+                exe.Forward();
+
+                y1 = exe.GetTensor(lstm.Y).ToArray3D();
+                cy1 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
+                hy1 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
+            }
+
+            {
+                var x = Variable<float>(PartialShape.Create(seqLength, batchSize, inputSize));
+                var lstm = new IteratedRnnCell<float>(new LstmRnnType(), x, 1, hiddenSize, true, 0.0);
+                var exe = new Executor(ctx, lstm.Output);
+                exe.Initalize();
+
+                // set input
+                exe.AssignTensor(lstm.Input, data.AsTensor());
+
+                lstm.AssignInitialStates(exe, h0.AsTensor(Shape.Create(1, batchSize, hiddenSize)), c0.AsTensor(Shape.Create(1, batchSize, hiddenSize)));
+
+                // set weigths, cuDNN matrices order: IFAO
+                var w = exe.GetTensor(lstm.W).Reshape(inputSize*4 + hiddenSize*4 + 2*4, hiddenSize);
+                SetWeights(ctx, w, inputSize, hiddenSize);
+
+                exe.Forward();
+
+                y2 = exe.GetTensor(lstm.Output).ToArray3D();
+            }
         }
     }
 }

@@ -14,7 +14,7 @@ namespace AleaTKTest
             //SequenceToSequenceTest.TestCreateVocabulary();
             //SequenceToSequenceTest.Preprocess();
             //SequenceToSequenceTest.BackTranslate();
-            SequenceToSequenceTest.TestBucketing();
+            SeqToSeqTest.TestBucketing();
         }
     }
 }
