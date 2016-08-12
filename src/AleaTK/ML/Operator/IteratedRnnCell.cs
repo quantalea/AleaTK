@@ -1,3 +1,6 @@
+using static AleaTK.Library;
+using static AleaTK.ML.Library;
+
 namespace AleaTK.ML.Operator
 {
     public class IteratedRnnCell<T> : Differentiable
@@ -41,16 +44,16 @@ namespace AleaTK.ML.Operator
             InputSize = (int)input.Shape[2];
 
             // output Shape (seqLength, batchSize, hiddenSize)
-            Output = Library.Variable<T>(PartialShape.Create(-1, BatchSize, HiddenSize));
+            Output = Variable<T>(PartialShape.Create(-1, BatchSize, HiddenSize));
 
             // W shape will be determined during initialization
-            W = Library.Parameter<T>();
+            W = Parameter<T>();
 
             // create variables for input hidden and cell state
-            HX = Library.Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
-            CX = Library.Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
-            HY = Library.Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
-            CY = Library.Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
+            HX =Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
+            CX =Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
+            HY =Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
+            CY =Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
 
             // state variable H and Y = (n - 1, layer, b, d), n is unknown
             var shape = PartialShape.Create(-1, NumLayers, BatchSize, HiddenSize);
@@ -96,14 +99,14 @@ namespace AleaTK.ML.Operator
 
         public void ZeroInitialStates(Executor executor)
         {
-            executor.AssignTensor(HX, AleaTK.Library.Fill(Shape.Create(HX.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
-            executor.AssignTensor(CX, AleaTK.Library.Fill(Shape.Create(CX.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignTensor(HX, Fill(Shape.Create(HX.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignTensor(CX, Fill(Shape.Create(CX.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
         }
 
         public void ZeroTerminalGradient(Executor executor)
         {
-            executor.AssignGradientDirectly(HY, AleaTK.Library.Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
-            executor.AssignGradientDirectly(CY, AleaTK.Library.Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignGradientDirectly(HY, Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignGradientDirectly(CY, Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
         }
 
         public override void Forward(Executor executor)

@@ -41,9 +41,6 @@ namespace AleaTK.ML.Operator
             var data = executor.GetTensor(Data);
             var weights = executor.GetTensor(Weights);
             var bias = executor.GetTensor(Bias);
-            //Console.WriteLine($"--> {data.Shape}");
-            //Console.WriteLine($"--> {weights.Shape}");
-            //Console.WriteLine($"--> {bias.Shape}");
             executor.AssignTensor(Output, Dot(data.Reshape(data.Shape[0], -1), weights) + bias);
         }
 
@@ -53,7 +50,6 @@ namespace AleaTK.ML.Operator
             var weights = executor.GetTensor(Weights);
             var dOutput = executor.GetGradient(Output);
             executor.AssignGradient(Data, Dot(dOutput, weights.T).Reshape(data.Shape.AsArray));
-            //executor.AssignGradient(Weights, Dot(data.T.Reshape(-1, data.Shape[data.Shape.Rank - 1]), dOutput));
             executor.AssignGradient(Weights, Dot(data.Reshape(data.Shape[0], -1).T, dOutput));
             executor.AssignGradient(Bias, ReduceSum(dOutput, 0));
         }

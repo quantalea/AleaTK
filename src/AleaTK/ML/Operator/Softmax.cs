@@ -42,7 +42,6 @@ namespace AleaTK.ML.Operator
             var y = executor.GetTensor(Label);
 
             // ---- old solution
-
             // pred is the output of softmax
             //executor.AssignTensor(LogPred, Exp(z) / ReduceSum(Exp(z).Reshape(-1, z.Shape[z.Shape.Rank - 1]), true, 1));
 

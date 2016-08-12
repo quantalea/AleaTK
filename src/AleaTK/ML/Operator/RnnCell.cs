@@ -98,7 +98,7 @@ namespace AleaTK.ML.Operator
                 IntPtr reserveSize;
                 dnn.GetRNNTrainingReserveSize(RnnDesc, 1, XDesc, out reserveSize);
                 ReserveSize = reserveSize.ToInt64();
-                //ReserveSpace = executor.Context.Device.Allocate<byte>(Shape.Create(reserveSize.ToInt64()));
+                //ReserveSpace = executor.AttentionState.Device.Allocate<byte>(Shape.Create(reserveSize.ToInt64()));
             }
 
             IntPtr weightsSize;
@@ -134,27 +134,22 @@ namespace AleaTK.ML.Operator
                         TensorFormat format;
 
                         deviceptr<T> linLayerMat;
-                        dnn.GetRNNLinLayerMatrixParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId,
-                            filterDesc, out linLayerMat);
+                        dnn.GetRNNLinLayerMatrixParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId, filterDesc, out linLayerMat);
 
                         filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
                         var length = filterDimA.Aggregate(ScalarOps.Mul);
 
-                        var linLayerMatBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)),
-                            linLayerMat);
+                        var linLayerMatBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)), linLayerMat);
                         var linLayerMatTensor = new Tensor<T>(linLayerMatBuffer);
-                        context.Assign(linLayerMatTensor,
-                            AleaTK.Library.RandomNormal<T>(Shape.Create(length))/(Math.Sqrt(HiddenSize + InputSize).AsScalar<T>()));
+                        context.Assign(linLayerMatTensor, AleaTK.Library.RandomNormal<T>(Shape.Create(length))/(Math.Sqrt(HiddenSize + InputSize).AsScalar<T>()));
 
                         deviceptr<T> linLayerBias;
-                        dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId, filterDesc,
-                            out linLayerBias);
+                        dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId, filterDesc, out linLayerBias);
 
                         filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
                         length = filterDimA.Aggregate(ScalarOps.Mul);
 
-                        var linLayerBiasBuffer = new Buffer<T>(context.Device, w.Memory,
-                            new Layout(Shape.Create(length)), linLayerBias);
+                        var linLayerBiasBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)), linLayerBias);
                         var linLayerBiasTensor = new Tensor<T>(linLayerBiasBuffer);
                         RnnType.InitBias(context, layer, linLayerId, linLayerBiasTensor);
                     }

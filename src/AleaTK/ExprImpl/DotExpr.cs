@@ -103,7 +103,7 @@ namespace AleaTK.ExprImpl
             var add = Add;
             var mul = Mul;
 
-            //if (assignment.Context.Type == ContextType.Gpu)
+            //if (assignment.AttentionState.Type == ContextType.Gpu)
             //{
             //    Func<long, long, T> getA = (row, col) => row < aRows && col < aCols ? readA(row, col) : zero;
             //    Func<long, long, T> getB = (row, col) => row < bRows && col < bCols ? readB(row, col) : zero;
@@ -114,7 +114,7 @@ namespace AleaTK.ExprImpl
             //    var blockSize = new dim3(BlockSize, BlockSize);
             //    var gridSize = new dim3((int)ScalarOps.DivUp(aRows, BlockSize), (int)ScalarOps.DivUp(bCols, BlockSize));
             //    var lp = new LaunchParam(gridSize, blockSize);
-            //    var stream = assignment.Context.ToGpuContext().Stream;
+            //    var stream = assignment.AttentionState.ToGpuContext().Stream;
             //    stream.Launch(Kernel, lp, aCols, getA, getB, setC, zero, add, mul);
             //    return true;
             //}

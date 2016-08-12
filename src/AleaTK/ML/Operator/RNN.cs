@@ -2,7 +2,6 @@
 using System.Linq;
 using Alea;
 using Alea.cuDNN;
-using Alea.Parallel;
 using static AleaTK.Library;
 using static AleaTK.ML.Library;
 

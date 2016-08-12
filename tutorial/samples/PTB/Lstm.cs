@@ -32,8 +32,7 @@ namespace Tutorial.Samples
 
             // W (1 + inputSize + hiddenSize, 4 * hiddenSize) : B -> W -> U
             // layout: IFOA
-            W = Parameter(RandomNormal<T>(Shape.Create(InputSize + HiddenSize + 1, 4 * HiddenSize)) /
-                          (Math.Sqrt(InputSize + hiddenSize)).AsScalar<T>());
+            W = Parameter(RandomNormal<T>(Shape.Create(InputSize + HiddenSize + 1, 4 * HiddenSize)) / Math.Sqrt(InputSize + hiddenSize).AsScalar<T>());
 
             // input and output states
             CX = cx ?? Variable<T>(PartialShape.Create(-1, HiddenSize));
@@ -82,8 +81,7 @@ namespace Tutorial.Samples
             // set forget bias is needed, layout: IFOA, so forget index is 1
             if (ForgetBiasInit != 0.0)
             {
-                ctx.Assign(w.Slice(0, Range(HiddenSize, 2 * HiddenSize)),
-                    Fill(Shape.Create(1, HiddenSize), ScalarOps.Conv<T>(ForgetBiasInit)));
+                ctx.Assign(w.Slice(0, Range(HiddenSize, 2 * HiddenSize)), Fill(Shape.Create(1, HiddenSize), ScalarOps.Conv<T>(ForgetBiasInit)));
             }
         }
 

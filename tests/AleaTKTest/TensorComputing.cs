@@ -939,7 +939,7 @@ namespace AleaTKTest
             a.Print();
             var b = ctx.Device.Allocate<double>(Shape.Create(M, N));
             // we reduce sum the exp(a) on columns, and keepdims so it stays as a column vector.
-            var softmax = Exp(a) / (ReduceSum(Exp(a), true, 1));
+            var softmax = Exp(a) / ReduceSum(Exp(a), true, 1);
             ctx.Assign(b, softmax);
             b.Print();
 
