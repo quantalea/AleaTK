@@ -72,10 +72,12 @@
     <Compile Include="ML\Operator\Dropout.cs" />
     <Compile Include="ML\Operator\Embedding.cs" />
     <Compile Include="ML\Operator\FullyConnected.cs" />
+    <Compile Include="ML\Operator\IteratedRnnCell.cs" />
     <Compile Include="ML\Operator\L2Loss.cs" />
     <Compile Include="ML\Operator\Pooling.cs" />
     <Compile Include="ML\Operator\Reshape.cs" />
     <Compile Include="ML\Operator\Rnn.cs" />
+    <Compile Include="ML\Operator\RnnCell.cs" />
     <Compile Include="ML\Operator\RnnDynamic.cs" />
     <Compile Include="ML\Operator\SeqToSeq.cs" />
     <Compile Include="ML\Operator\Softmax.cs" />
