@@ -37,7 +37,8 @@ namespace AleaTK.ML.Operator
 
         public Tensor<byte> DropoutStates { get; }
         public Tensor<byte> Workspace { get; }
-        public Tensor<byte> ReserveSpace { get; }
+        public Tensor<byte> ReserveSpace { get; set; }
+        public long ReserveSize { get; }
 
         public DropoutDescriptor DropoutDesc { get; } = new DropoutDescriptor();
         public FilterDescriptor WDesc { get; } = new FilterDescriptor();
@@ -99,7 +100,8 @@ namespace AleaTK.ML.Operator
             {
                 IntPtr reserveSize;
                 dnn.GetRNNTrainingReserveSize(RnnDesc, 1, XDesc, out reserveSize);
-                ReserveSpace = executor.Context.Device.Allocate<byte>(Shape.Create(reserveSize.ToInt64()));
+                ReserveSize = reserveSize.ToInt64();
+                //ReserveSpace = executor.Context.Device.Allocate<byte>(Shape.Create(reserveSize.ToInt64()));
             }
 
             IntPtr weightsSize;
@@ -277,8 +279,7 @@ namespace AleaTK.ML.Operator
         public Variable<T> CY { get; }
         public Variable<T> H { get; }
         public Variable<T> C { get; }
-        public Variable<T> DH { get; }
-        public Variable<T> DC { get; }
+        public Variable<byte> ReserveSpace { get; }
 
         public readonly Symbol RnnCellDescr = new Symbol();
 
@@ -310,12 +311,12 @@ namespace AleaTK.ML.Operator
             HY = Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
             CY = Variable<T>(PartialShape.Create(NumLayers, BatchSize, HiddenSize));
 
-            // state variables HX = H(0,:,:,:), HY = H(1,:,:,:)
-            var shape = PartialShape.Create(2, NumLayers, BatchSize, HiddenSize);
+            // state variable H and Y = (n - 1, layer, b, d), n is unknown
+            var shape = PartialShape.Create(-1, NumLayers, BatchSize, HiddenSize);
             H = Variable<T>(shape);
             C = Variable<T>(shape);
-            DH = Variable<T>(shape);
-            DC = Variable<T>(shape);
+
+            ReserveSpace = Variable<byte>();
 
             // construct the graph
             AddInput(Input);
@@ -327,8 +328,7 @@ namespace AleaTK.ML.Operator
             AddAuxVar(CY);
             AddAuxVar(H);
             AddAuxVar(C);
-            AddAuxVar(DH);
-            AddAuxVar(DC);
+            AddAuxVar(ReserveSpace);
         }
 
         public override void Initialize(Executor executor)
@@ -369,43 +369,60 @@ namespace AleaTK.ML.Operator
         {
             var cell = (RnnCell<T>) executor.Objects[RnnCellDescr];
 
-            // input should be allocated by the training procedure
+            // input should be allocated by the training procedure, so no need to give shape
             var input = executor.GetTensor(Input);
             var seqLength = input.Shape[0];
 
             // output is the output of this op, so we need give shape to allocate it
             var output = executor.GetTensor(Output, Shape.Create(seqLength, BatchSize, HiddenSize));
 
-            var shape = Shape.Create(2, NumLayers, BatchSize, HiddenSize);
-            var h = executor.GetTensor(H, shape);
-            var c = executor.GetTensor(C, shape);
-
-            // copy cx and hx
+            // hx and cx is input, it must be assigned before running forward
+            // hy and cy is output, we give shape to allocate them
             var hx = executor.GetTensor(HX);
             var cx = executor.GetTensor(CX);
-            executor.Context.Assign(h.Slice(0), hx);
-            executor.Context.Assign(c.Slice(0), cx);
+            var hy = executor.GetTensor(HY, Shape.Create(HY.Shape.AsArray));
+            var cy = executor.GetTensor(CY, Shape.Create(CY.Shape.AsArray));
+
+            // h and c are for record the intermediate states h and c, it is of length seqLenght - 1
+            // if n = 1, then no need for this
+            var shape = seqLength == 1 ? Shape.Create(1) : Shape.Create(seqLength - 1, NumLayers, BatchSize, HiddenSize);
+            var h = seqLength == 1 ? null : executor.GetTensor(H, shape);
+            var c = seqLength == 1 ? null : executor.GetTensor(C, shape);
+
+            // reserveSpace, according to doc of cuDNN, must be kept for each step
+            var reserveSpace = executor.GetTensor(ReserveSpace, Shape.Create(seqLength, cell.ReserveSize));
 
             // iterate through the sequence one time step at a time
             for (var t = 0; t < seqLength; ++t)
             {
                 cell.Input = input.Slice(t);
                 cell.Output = output.Slice(t);
+                cell.ReserveSpace = reserveSpace.Slice(t);
 
-                var i = t % 2;
-                cell.HX = h.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
-                cell.HY = h.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
-                cell.CX = c.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
-                cell.CY = c.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
+                if (t == 0)
+                {
+                    cell.HX = hx;
+                    cell.CX = cx;
+                }
+                else
+                {
+                    cell.HX = h.Slice(t - 1).Reshape(NumLayers, BatchSize, HiddenSize);
+                    cell.CX = c.Slice(t - 1).Reshape(NumLayers, BatchSize, HiddenSize);
+                }
+
+                if (t == seqLength - 1)
+                {
+                    cell.HY = hy;
+                    cell.CY = cy;
+                }
+                else
+                {
+                    cell.HY = h.Slice(t).Reshape(NumLayers, BatchSize, HiddenSize);
+                    cell.CY = c.Slice(t).Reshape(NumLayers, BatchSize, HiddenSize);
+                }
 
                 cell.Forward(executor);
             }
-
-            // copy output
-            var hy = executor.GetTensor(HY, Shape.Create(HY.Shape.AsArray));
-            var cy = executor.GetTensor(CY, Shape.Create(CY.Shape.AsArray));
-            executor.Context.Assign(hy, h.Slice(seqLength%2).Reshape(hy.Shape.AsArray));
-            executor.Context.Assign(cy, c.Slice(seqLength%2).Reshape(cy.Shape.AsArray));
         }
 
         public override void Backward(Executor executor)
@@ -420,20 +437,32 @@ namespace AleaTK.ML.Operator
             var dInput = executor.GetGradient(Input, input.Shape);
             var dOutput = executor.GetGradient(Output);
 
-            var shape = Shape.Create(2, NumLayers, BatchSize, HiddenSize);
-            var h = executor.GetTensor(H, shape);
-            var c = executor.GetTensor(C, shape);
-            var dh = executor.GetTensor(DH, shape);
-            var dc = executor.GetTensor(DC, shape);
+            // dhy and dcy should be set before calling backward, while dhx and dcx is part of
+            // our output, so we give shape to allocate them
+            var dhy = executor.GetGradient(HY);
+            var dcy = executor.GetGradient(CY);
+            var dhx = executor.GetGradient(HX, Shape.Create(HX.Shape.AsArray));
+            var dcx = executor.GetGradient(CX, Shape.Create(CX.Shape.AsArray));
 
-            var dhy = executor.GetGradient(HY, Shape.Create(HY.Shape.AsArray));
-            var dcy = executor.GetGradient(CY, Shape.Create(CY.Shape.AsArray));
-            executor.Context.Assign(dh.Slice(0), dhy);
-            executor.Context.Assign(dc.Slice(0), dcy);
+            // hx and cx are input, hy and cy are output of forward, they are allocated, no need
+            // to give shape to allocate
+            var hx = executor.GetTensor(HX);
+            var cx = executor.GetTensor(CX);
+            var hy = executor.GetTensor(HY);
+            var cy = executor.GetTensor(CY);
 
-            // TODO: should we copy hy and cy? if the swap is correct, we can avoid this.
+            // h and c are there by forward, no need to give shape to allocate
+            // dh and dc we need allocate
+            // TODO: actually dh and dc is not needed for each step, we can use swap to reduce memory cost
+            var seqLength = (int)input.Shape[0];
+            var shape = seqLength == 1 ? Shape.Create(1) : Shape.Create(seqLength - 1, NumLayers, BatchSize, HiddenSize);
+            var h = seqLength == 1 ? null : executor.GetTensor(H);
+            var c = seqLength == 1 ? null : executor.GetTensor(C);
+            var dh = seqLength == 1 ? null : executor.GetGradient(H, shape);
+            var dc = seqLength == 1 ? null : executor.GetGradient(C, shape);
 
-            var seqLength = (int)Input.Shape[0];
+            // reserveSpace should be calculated by forward
+            var reserveSpace = executor.GetTensor(ReserveSpace);
 
             for (var t = seqLength - 1; t >= 0; --t)
             {
@@ -441,25 +470,40 @@ namespace AleaTK.ML.Operator
                 cell.Output = output.Slice(t);
                 cell.DOutput = dOutput.Slice(t);
                 cell.DInput = dInput.Slice(t);
+                cell.ReserveSpace = reserveSpace.Slice(t);
 
-                var i = (seqLength - 1 - t) % 2;
-                cell.HX = h.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
-                cell.HY = h.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
-                cell.CX = c.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
-                cell.CY = c.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
-                cell.DHX = dh.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
-                cell.DHY = dh.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
-                cell.DCX = dc.Slice(i).Reshape(NumLayers, BatchSize, HiddenSize);
-                cell.DCY = dc.Slice(1 - i).Reshape(NumLayers, BatchSize, HiddenSize);
+                if (t == seqLength - 1)
+                {
+                    cell.HY = hy;
+                    cell.CY = cy;
+                    cell.DHY = dhy;
+                    cell.DCY = dcy;
+                }
+                else
+                {
+                    cell.HY = h.Slice(t).Reshape(NumLayers, BatchSize, HiddenSize);
+                    cell.CY = c.Slice(t).Reshape(NumLayers, BatchSize, HiddenSize);
+                    cell.DHY = dh.Slice(t).Reshape(NumLayers, BatchSize, HiddenSize);
+                    cell.DCY = dc.Slice(t).Reshape(NumLayers, BatchSize, HiddenSize);
+                }
+
+                if (t == 0)
+                {
+                    cell.HX = hx;
+                    cell.CX = cx;
+                    cell.DHX = dhx;
+                    cell.DCX = dcx;
+                }
+                else
+                {
+                    cell.HX = h.Slice(t - 1).Reshape(NumLayers, BatchSize, HiddenSize);
+                    cell.CX = c.Slice(t - 1).Reshape(NumLayers, BatchSize, HiddenSize);
+                    cell.DHX = dh.Slice(t - 1).Reshape(NumLayers, BatchSize, HiddenSize);
+                    cell.DCX = dc.Slice(t - 1).Reshape(NumLayers, BatchSize, HiddenSize);
+                }
 
                 cell.Backward(executor);
             }
-
-            // copy output
-            var dhx = executor.GetGradient(HX, Shape.Create(HX.Shape.AsArray));
-            var dcx = executor.GetGradient(CX, Shape.Create(CX.Shape.AsArray));
-            executor.Context.Assign(dhx, dh.Slice(seqLength%2).Reshape(dhx.Shape.AsArray));
-            executor.Context.Assign(dcx, dc.Slice(seqLength%2).Reshape(dcx.Shape.AsArray));
         }
     }
 

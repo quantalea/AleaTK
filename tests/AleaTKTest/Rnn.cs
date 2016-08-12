@@ -183,7 +183,7 @@ namespace AleaTKTest
 
             var h0 = Context.CpuContext.Eval(RandomNormal<float>(Shape.Create(batchSize, hiddenSize))).ToArray2D();
             var c0 = Context.CpuContext.Eval(RandomNormal<float>(Shape.Create(batchSize, hiddenSize))).ToArray2D();
-            var dOUtput = Context.CpuContext.Eval(RandomUniform<float>(-1, 1, Shape.Create(seqLength, batchSize, hiddenSize))).ToArray3D();
+            var dOutput = Context.CpuContext.Eval(RandomUniform<float>(-1, 1, Shape.Create(seqLength, batchSize, hiddenSize))).ToArray3D();
 
             float[,,] y1, y2, dx1, dx2;
             float[,] cy1, cy2, hy1, hy2;
@@ -213,7 +213,7 @@ namespace AleaTKTest
                 cy1 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
                 hy1 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
 
-                exe.AssignGradientDirectly(lstm.Y, dOUtput.AsTensor());
+                exe.AssignGradientDirectly(lstm.Y, dOutput.AsTensor());
 
                 exe.Backward();
 
@@ -233,6 +233,7 @@ namespace AleaTKTest
                 // set input
                 exe.AssignTensor(lstm.Input, data.AsTensor());
 
+                // set cx and hx
                 lstm.AssignInitialStates(exe, h0.AsTensor(Shape.Create(1, batchSize, hiddenSize)), c0.AsTensor(Shape.Create(1, batchSize, hiddenSize)));
 
                 // set weigths, cuDNN matrices order: IFAO
@@ -245,11 +246,15 @@ namespace AleaTKTest
                 cy2 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
                 hy2 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
 
-                exe.AssignGradientDirectly(lstm.Output, dOUtput.AsTensor());
+                // set dy
+                exe.AssignGradientDirectly(lstm.Output, dOutput.AsTensor());
+
+                // set dcy and dhy
+                lstm.ZeroTerminalGradient(exe);
 
                 exe.Backward();
 
-                dx2 = exe.GetGradient(lstm.Output).ToArray3D();
+                dx2 = exe.GetGradient(lstm.Input).ToArray3D();
                 dcx2 = exe.GetGradient(lstm.CX).Reshape(batchSize, hiddenSize).ToArray2D();
                 dhx2 = exe.GetGradient(lstm.HX).Reshape(batchSize, hiddenSize).ToArray2D();
                 dw2 = exe.GetGradient(lstm.W).ToArray();
@@ -258,10 +263,14 @@ namespace AleaTKTest
             AreClose(y1, y2, error);
             AreClose(cy1, cy2, error);
             AreClose(hy1, hy2, error);
-            //AreClose(dx1, dx2, error);  // bugbug
-            //AreClose(dcx1, dcx2, error); // bugbug
-            //AreClose(dhx1, dhx2, error); // bugbug
-            //AreClose(dw1, dw2, error); // bugbug 
+
+            dx1.AsTensor().Reshape(seqLength * batchSize, inputSize).Print();
+            dx2.AsTensor().Reshape(seqLength * batchSize, inputSize).Print();
+
+            AreClose(dx1, dx2, error);
+            AreClose(dcx1, dcx2, error);
+            AreClose(dhx1, dhx2, error);
+            AreClose(dw1, dw2, error); 
         }
     }
 }
