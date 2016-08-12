@@ -108,17 +108,22 @@ namespace AleaTK.ML.Operator
                 var seqLength = SeqLength;
                 var encoderHiddenSize = EncoderHiddenSize;
 
-                // TODO not finished
-                var lp = new LaunchParam(1, batchSize*encoderHiddenSize);
+                // strides for hPtr: [n*b, b, 1]
+                // TODO proper size
+                var lp = new LaunchParam(new dim3(batchSize/32, encoderHiddenSize/32, 1), new dim3(32, 32));
                 stream.Launch(() =>
                 {
-                    var batch = threadIdx.x;
-                    var hiddenDim = threadIdx.y;
-                    var hsum = 0.0;
-                    var alpha = softmaxPtr[hiddenDim*batchSize];
-                    for (var t = 0; t < seqLength; ++t)
+                    var batch = blockIdx.x*blockDim.x + threadIdx.x;
+                    var hidden = blockIdx.y*blockDim.y + threadIdx.y;
+                    if (batch < batchSize && hidden < EncoderHiddenSize)
                     {
-                        hsum += alpha*hPtr[0];
+                        var sum = 0.0f;
+                        for (var i = 0; i < seqLength; ++i)
+                        {
+                            var alpha = softmaxPtr[i * batchSize + batch];
+                            sum += alpha * hPtr[i * seqLength * batchSize + batch * batchSize + hidden];
+                        }
+                        attentionState[batch * encoderHiddenSize + hidden] = sum;
                     }
                 }, lp);
             }
