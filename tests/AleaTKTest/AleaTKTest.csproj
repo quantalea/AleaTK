@@ -51,6 +51,7 @@
   <ItemGroup>
     <Compile Include="Common.cs" />
     <Compile Include="MachineLearning.cs" />
+    <Compile Include="MLFramework.cs" />
     <Compile Include="SeqToSeqTest.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
