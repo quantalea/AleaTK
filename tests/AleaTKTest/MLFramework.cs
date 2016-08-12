@@ -93,7 +93,7 @@ namespace AleaTKTest
 
             var size = 100;
             var input = Variable<float>(PartialShape.Create(size, size));
-            var loop = new ImperativeLoopOp(input);
+            var loop = new ImperativeLoopOp(input, size);
 
             var exe = new Executor(ctx, loop.Output);
             exe.Initalize();
