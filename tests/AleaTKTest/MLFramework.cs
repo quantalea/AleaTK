@@ -153,6 +153,8 @@ namespace AleaTKTest
             public long AttentionDim { get; }
             public long EncoderHiddenSize { get; }
             public long DecoderHiddenSize { get; }
+            public long EncoderSeqLength { get; }
+            public long Batch { get; }
 
             public Variable<T> Output { get; }
 
@@ -163,11 +165,17 @@ namespace AleaTKTest
                 DecoderHiddenStates = decoderHiddenStates;
 
                 Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "EncoderHiddenStates layout: (seqLength, batch, encoderHiddenSize)");
+                Util.EnsureTrue(EncoderHiddenStates.Shape[0] > 0, "EncoderSeqLength should be determined.");
+                //Util.EnsureTrue(EncoderHiddenStates.Shape[1] > 0, "Batch should be determined.");
                 Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "EncoderHiddenStates should be determined.");
+                EncoderSeqLength = EncoderHiddenStates.Shape[0];
+                Batch = EncoderHiddenStates.Shape[1];
                 EncoderHiddenSize = EncoderHiddenStates.Shape[2];
 
                 Util.EnsureEqual(2, DecoderHiddenStates.Shape.Rank, "DecoderHiddenStates layout: (batch, decoderHiddenSize)");
+                //Util.EnsureTrue(DecoderHiddenStates.Shape[0] > 0, "Batch should be determined.");
                 Util.EnsureTrue(DecoderHiddenStates.Shape[1] > 0, "DecoderHiddenStates should be determined.");
+                Util.EnsureEqual(Batch, DecoderHiddenStates.Shape[0], "Batch not match.");
                 DecoderHiddenSize = DecoderHiddenStates.Shape[1];
 
                 var scaleWh = Sqrt(12.0.AsScalar<T>() / ((double)(AttentionDim + EncoderHiddenSize)).AsScalar<T>());
@@ -179,7 +187,7 @@ namespace AleaTKTest
                 // build the graph
                 var h = EncoderHiddenStates.Reshape(-1, EncoderHiddenSize);
                 var d = DecoderHiddenStates;
-                var whh = Dot(h, Wh);
+                var whh = Dot(h, Wh).Reshape(EncoderSeqLength, -1, AttentionDim);
                 var wdd = Dot(d, Wd);
 
                 Output = whh + wdd;
@@ -196,7 +204,7 @@ namespace AleaTKTest
             var attentionDim = 3;
 
             // (encoderSeqLength, batch, encoderHiddenSize)
-            var encoderHiddenStates = Variable<float>(PartialShape.Create(-1, -1, encoderHiddenSize));
+            var encoderHiddenStates = Variable<float>(PartialShape.Create(encoderSeqLength, -1, encoderHiddenSize));
             var decoderHiddenStates = Variable<float>(PartialShape.Create(-1, decoderHiddenSize));
             var attention = new Attention<float>(encoderHiddenStates, decoderHiddenStates, attentionDim);
 
@@ -215,15 +223,16 @@ namespace AleaTKTest
             exe.Forward();
 
             var tensorOutput = exe.GetTensor(attention.Output);
-            tensorOutput.Print();
+            Console.WriteLine(tensorOutput.Shape);
+            tensorOutput.Reshape(encoderSeqLength*batch, -1).Print();
 
-            //var dataDOutput = new float[encoderSeqLength*batch, attentionDim];
-            //RandArray(dataDOutput);
-            //exe.AssignGradientDirectly(attention.Output, dataDOutput.AsTensor());
-            //exe.Backward();
+            var dataDOutput = new float[encoderSeqLength, batch, attentionDim];
+            RandArray(dataDOutput);
+            exe.AssignGradientDirectly(attention.Output, dataDOutput.AsTensor());
+            exe.Backward();
 
-            //var tensorDWh = exe.GetGradient(attention.Wh);
-            //tensorDWh.Print();
+            var tensorDWh = exe.GetGradient(attention.Wh);
+            tensorDWh.Print();
         }
     }
 }
