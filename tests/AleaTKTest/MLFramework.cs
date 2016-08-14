@@ -2,6 +2,7 @@
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Data;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -112,6 +113,117 @@ namespace AleaTKTest
             exe.Forward();
 
 
+        }
+
+        private static readonly Random _rng = new Random();
+
+        private static void RandArray(float[,] array)
+        {
+            for (var i = 0; i < array.GetLength(0); ++i)
+            {
+                for (var j = 0; j < array.GetLength(1); ++j)
+                {
+                    array[i, j] = (float)_rng.NextDouble();
+                }
+            }
+        }
+
+        private static void RandArray(float[,,] array)
+        {
+            for (var i = 0; i < array.GetLength(0); ++i)
+            {
+                for (var j = 0; j < array.GetLength(1); ++j)
+                {
+                    for (var k = 0; k < array.GetLength(2); ++k)
+                    {
+                        array[i, j, k] = (float)_rng.NextDouble();
+                    }
+                }
+            }
+        }
+
+        public class Attention<T>
+        {
+            public Variable<T> EncoderHiddenStates { get; }
+            public Variable<T> DecoderHiddenStates { get; }
+
+            public Variable<T> Wh { get; }
+            public Variable<T> Wd { get; }
+
+            public long AttentionDim { get; }
+            public long EncoderHiddenSize { get; }
+            public long DecoderHiddenSize { get; }
+
+            public Variable<T> Output { get; }
+
+            public Attention(Variable<T> encoderHiddenStates, Variable<T> decoderHiddenStates, long attentionDim)
+            {
+                AttentionDim = attentionDim;
+                EncoderHiddenStates = encoderHiddenStates;
+                DecoderHiddenStates = decoderHiddenStates;
+
+                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "EncoderHiddenStates layout: (seqLength, batch, encoderHiddenSize)");
+                Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "EncoderHiddenStates should be determined.");
+                EncoderHiddenSize = EncoderHiddenStates.Shape[2];
+
+                Util.EnsureEqual(2, DecoderHiddenStates.Shape.Rank, "DecoderHiddenStates layout: (batch, decoderHiddenSize)");
+                Util.EnsureTrue(DecoderHiddenStates.Shape[1] > 0, "DecoderHiddenStates should be determined.");
+                DecoderHiddenSize = DecoderHiddenStates.Shape[1];
+
+                var scaleWh = Sqrt(12.0.AsScalar<T>() / ((double)(AttentionDim + EncoderHiddenSize)).AsScalar<T>());
+                Wh = Parameter(scaleWh * (RandomUniform<T>(Shape.Create(EncoderHiddenSize, AttentionDim), 0UL, 0UL) - 0.5.AsScalar<T>()));
+
+                var scaleWd = Sqrt(12.0.AsScalar<T>()/((double) (AttentionDim + DecoderHiddenSize)).AsScalar<T>());
+                Wd = Parameter(scaleWd * (RandomUniform<T>(Shape.Create(DecoderHiddenSize, AttentionDim), 0UL, 0UL) - 0.5.AsScalar<T>()));
+
+                // build the graph
+                var h = EncoderHiddenStates.Reshape(-1, EncoderHiddenSize);
+                var d = DecoderHiddenStates;
+                var whh = Dot(h, Wh);
+                var wdd = Dot(d, Wd);
+
+                Output = whh + wdd;
+            }
+        }
+
+        [Test]
+        public static void TestAttention()
+        {
+            var batch = 4;
+            var encoderHiddenSize = 5;
+            var decoderHiddenSize = 4;
+            var encoderSeqLength = 3;
+            var attentionDim = 3;
+
+            // (encoderSeqLength, batch, encoderHiddenSize)
+            var encoderHiddenStates = Variable<float>(PartialShape.Create(-1, -1, encoderHiddenSize));
+            var decoderHiddenStates = Variable<float>(PartialShape.Create(-1, decoderHiddenSize));
+            var attention = new Attention<float>(encoderHiddenStates, decoderHiddenStates, attentionDim);
+
+            var ctx = Context.GpuContext(0);
+            var exe = new Executor(ctx, attention.Output);
+            exe.Initalize();
+
+            var dataEncoderHiddenStates = new float[encoderSeqLength, batch, encoderHiddenSize];
+            RandArray(dataEncoderHiddenStates);
+
+            var dataDecoderHiddenStates = new float[batch, decoderHiddenSize];
+            RandArray(dataDecoderHiddenStates);
+
+            exe.AssignTensor(encoderHiddenStates, dataEncoderHiddenStates.AsTensor());
+            exe.AssignTensor(decoderHiddenStates, dataDecoderHiddenStates.AsTensor());
+            exe.Forward();
+
+            var tensorOutput = exe.GetTensor(attention.Output);
+            tensorOutput.Print();
+
+            //var dataDOutput = new float[encoderSeqLength*batch, attentionDim];
+            //RandArray(dataDOutput);
+            //exe.AssignGradientDirectly(attention.Output, dataDOutput.AsTensor());
+            //exe.Backward();
+
+            //var tensorDWh = exe.GetGradient(attention.Wh);
+            //tensorDWh.Print();
         }
     }
 }
