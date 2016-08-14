@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using AleaTK;
 using AleaTK.ML;
+using AleaTK.ML.Operator;
 using NUnit.Framework;
 using static AleaTK.Library;
 using static AleaTK.ML.Library;
@@ -149,11 +150,11 @@ namespace AleaTKTest
 
             public Variable<T> Wh { get; }
             public Variable<T> Wd { get; }
+            public Variable<T> V { get; }
 
             public long AttentionDim { get; }
             public long EncoderHiddenSize { get; }
             public long DecoderHiddenSize { get; }
-            public long EncoderSeqLength { get; }
             public long Batch { get; }
 
             public Variable<T> Output { get; }
@@ -164,18 +165,15 @@ namespace AleaTKTest
                 EncoderHiddenStates = encoderHiddenStates;
                 DecoderHiddenStates = decoderHiddenStates;
 
-                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "EncoderHiddenStates layout: (seqLength, batch, encoderHiddenSize)");
-                Util.EnsureTrue(EncoderHiddenStates.Shape[0] > 0, "EncoderSeqLength should be determined.");
-                //Util.EnsureTrue(EncoderHiddenStates.Shape[1] > 0, "Batch should be determined.");
+                // one goal is, try to make batchSize and encoderSeqLength unknown at symbol layer
+                // so, in LSTM outer op, we can create one graph and one sub-executor, and applied for
+                // different encoderSeqLength and batchSize.
+                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "EncoderHiddenStates layout: (encoderSeqLength, batch, encoderHiddenSize)");
                 Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "EncoderHiddenStates should be determined.");
-                EncoderSeqLength = EncoderHiddenStates.Shape[0];
-                Batch = EncoderHiddenStates.Shape[1];
                 EncoderHiddenSize = EncoderHiddenStates.Shape[2];
 
                 Util.EnsureEqual(2, DecoderHiddenStates.Shape.Rank, "DecoderHiddenStates layout: (batch, decoderHiddenSize)");
-                //Util.EnsureTrue(DecoderHiddenStates.Shape[0] > 0, "Batch should be determined.");
                 Util.EnsureTrue(DecoderHiddenStates.Shape[1] > 0, "DecoderHiddenStates should be determined.");
-                Util.EnsureEqual(Batch, DecoderHiddenStates.Shape[0], "Batch not match.");
                 DecoderHiddenSize = DecoderHiddenStates.Shape[1];
 
                 var scaleWh = Sqrt(12.0.AsScalar<T>() / ((double)(AttentionDim + EncoderHiddenSize)).AsScalar<T>());
@@ -184,13 +182,39 @@ namespace AleaTKTest
                 var scaleWd = Sqrt(12.0.AsScalar<T>()/((double) (AttentionDim + DecoderHiddenSize)).AsScalar<T>());
                 Wd = Parameter(scaleWd * (RandomUniform<T>(Shape.Create(DecoderHiddenSize, AttentionDim), 0UL, 0UL) - 0.5.AsScalar<T>()));
 
+                var scaleV = Sqrt(12.0.AsScalar<T>() / ((double)(AttentionDim)).AsScalar<T>());
+                V = Parameter(scaleV * (RandomUniform<T>(Shape.Create(AttentionDim, 1), 0UL, 0UL) - 0.5.AsScalar<T>()));
+                
                 // build the graph
-                var h = EncoderHiddenStates.Reshape(-1, EncoderHiddenSize);
-                var d = DecoderHiddenStates;
-                var whh = Dot(h, Wh).Reshape(EncoderSeqLength, -1, AttentionDim);
-                var wdd = Dot(d, Wd);
+                var h = EncoderHiddenStates.Reshape(-1, EncoderHiddenSize); // (n*b,He) // He denotes hiddenSize of encoder
+                var d = DecoderHiddenStates; // (b,Hd) // Hd denotes hiddenSize of decoder
+                var whh = Dot(h, Wh); // shape (n*b,K) K denotes attentionDim
+                var wdd = Dot(d, Wd); // shape (b,K)
 
-                Output = whh + wdd;
+                // to add whh and wdd, we need broadcast, for this, we need to know at least n or b.
+                // The decision here is to make b known at symbolic layer, because then you can have
+                // flexibility on n (EncoderSeqLength), easier for making bucket.
+                // another issue is, our backward of add has some issue dealing with 3d array which has broadcast
+                // so, we can reshape them into 2d tensor here:
+                // initial shape: (n*b,K) + (b,K)
+                // reshape for the boadcast: (n,b*K) + (b*K) (for broadcasting, (b*K) will broadcast to (1,b*K)
+                // then: (n,b*K) + (b*K) = (n,b*K)
+                // reshape result to (n*b,K)
+                Batch = EncoderHiddenStates.Shape[1];
+                Util.EnsureTrue(Batch > 0, "Batch need to be determined.");
+                Util.EnsureTrue(Batch == DecoderHiddenStates.Shape[0]);
+                var add = (whh.Reshape(-1, Batch*AttentionDim) + wdd.Reshape(-1)).Reshape(-1, AttentionDim);
+
+                // tanh, shape no change (n*b,K)
+                var whd = new ActivationTanh<T>(add);
+
+                // (n*b,K) dot (K,1) = (n*b,1) => reshape to (n,b)
+                var u = Dot(whd.Output, V).Reshape(-1, Batch);
+
+                // same shape (n,b)
+                var softmax = new Softmax<T>(u); 
+
+                Output = softmax.Output;
             }
         }
 
@@ -200,18 +224,19 @@ namespace AleaTKTest
             var batch = 4;
             var encoderHiddenSize = 5;
             var decoderHiddenSize = 4;
-            var encoderSeqLength = 3;
             var attentionDim = 3;
 
             // (encoderSeqLength, batch, encoderHiddenSize)
-            var encoderHiddenStates = Variable<float>(PartialShape.Create(encoderSeqLength, -1, encoderHiddenSize));
-            var decoderHiddenStates = Variable<float>(PartialShape.Create(-1, decoderHiddenSize));
+            var encoderHiddenStates = Variable<float>(PartialShape.Create(-1, batch, encoderHiddenSize));
+            var decoderHiddenStates = Variable<float>(PartialShape.Create(batch, decoderHiddenSize));
             var attention = new Attention<float>(encoderHiddenStates, decoderHiddenStates, attentionDim);
 
             var ctx = Context.GpuContext(0);
-            var exe = new Executor(ctx, attention.Output);
+            var exe = new Executor(ctx, attention.Output) {AssignAllGradient = true};
             exe.Initalize();
 
+            // encoderSeqLength is flexibly at runtime
+            var encoderSeqLength = 3;
             var dataEncoderHiddenStates = new float[encoderSeqLength, batch, encoderHiddenSize];
             RandArray(dataEncoderHiddenStates);
 
@@ -226,13 +251,24 @@ namespace AleaTKTest
             Console.WriteLine(tensorOutput.Shape);
             tensorOutput.Reshape(encoderSeqLength*batch, -1).Print();
 
-            var dataDOutput = new float[encoderSeqLength, batch, attentionDim];
+            var dataDOutput = new float[encoderSeqLength, batch];
             RandArray(dataDOutput);
             exe.AssignGradientDirectly(attention.Output, dataDOutput.AsTensor());
             exe.Backward();
 
             var tensorDWh = exe.GetGradient(attention.Wh);
             tensorDWh.Print();
+
+            var tensorDWd = exe.GetGradient(attention.Wd);
+            tensorDWd.Print();
+
+            var tensorDH = exe.GetGradient(attention.EncoderHiddenStates);
+            Console.WriteLine(tensorDH.Shape);
+            tensorDH.Reshape(-1, encoderHiddenSize).Print();
+
+            var tensorDD = exe.GetGradient(attention.DecoderHiddenStates);
+            Console.WriteLine(tensorDD.Shape);
+            tensorDD.Print();
         }
     }
 }

@@ -207,4 +207,90 @@ namespace AleaTK.ML.Operator
             throw new NotImplementedException();
         }
     }
+
+    public class Softmax<T> : Differentiable
+    {
+        public Softmax(Variable<T> input)
+        {
+            Input = input;
+            Output = Variable<T>();
+            AddInput(Input);
+            AddOutput(Output);
+        }
+
+        public Variable<T> Input { get; }
+
+        public Variable<T> Output { get; }
+
+        public override void Forward(Executor executor)
+        {
+            var ctx = executor.Context;
+            var x = executor.GetTensor(Input);
+            var y = executor.GetTensor(Output, x.Shape);
+            
+            if (ctx.Type == ContextType.Gpu && x.Layout.IsInnerChangeMostFullyPacked)
+            {
+                var dnn = ctx.ToGpuContext().Dnn;
+                var n = (int)x.Shape[0];
+                var classes = (int)x.Shape[1];
+
+                using (var xDesc = executor.TensorDescRepo.Acquire())
+                using (var yDesc = executor.TensorDescRepo.Acquire())
+                {
+                    xDesc.Value.SetND(Dnn.DataTypeOf(typeof(T)), new[] { n, classes, 1, 1 }, new[] { classes, 1, 1, 1 });
+                    yDesc.Value.SetND(Dnn.DataTypeOf(typeof(T)), new[] { n, classes, 1, 1 }, new[] { classes, 1, 1, 1 });
+
+                    var xPtr = x.Buffer.Ptr;
+                    var yPtr = y.Buffer.Ptr;
+                    var alpha = ScalarOps.Conv<T>(1.0);
+                    var beta = ScalarOps.Conv<T>(0.0);
+                    const SoftmaxAlgorithm algorithm = SoftmaxAlgorithm.ACCURATE;
+                    const SoftmaxMode mode = SoftmaxMode.INSTANCE;
+
+                    dnn.SoftmaxForward(algorithm, mode, alpha, xDesc.Value, xPtr, beta, yDesc.Value, yPtr);
+                }
+
+                return;
+            }
+
+            throw new NotImplementedException();
+        }
+
+        public override void Backward(Executor executor)
+        {
+            var ctx = executor.Context;
+            var x = executor.GetTensor(Input);
+            var y = executor.GetTensor(Output);
+            var dx = executor.GetGradient(Input, x.Shape);
+            var dy = executor.GetGradient(Output);
+
+            if (ctx.Type == ContextType.Gpu && x.Layout.IsInnerChangeMostFullyPacked)
+            {
+                var dnn = ctx.ToGpuContext().Dnn;
+                var n = (int)x.Shape[0];
+                var classes = (int)x.Shape[1];
+
+                using (var xDesc = executor.TensorDescRepo.Acquire())
+                using (var yDesc = executor.TensorDescRepo.Acquire())
+                {
+                    xDesc.Value.SetND(Dnn.DataTypeOf(typeof(T)), new[] { n, classes, 1, 1 }, new[] { classes, 1, 1, 1 });
+                    yDesc.Value.SetND(Dnn.DataTypeOf(typeof(T)), new[] { n, classes, 1, 1 }, new[] { classes, 1, 1, 1 });
+
+                    var dxPtr = dx.Buffer.Ptr;
+                    var yPtr = y.Buffer.Ptr;
+                    var dyPtr = dy.Buffer.Ptr;
+                    var alpha = ScalarOps.Conv<T>(1.0);
+                    var beta = ScalarOps.Conv<T>(0.0);
+                    const SoftmaxAlgorithm algorithm = SoftmaxAlgorithm.ACCURATE;
+                    const SoftmaxMode mode = SoftmaxMode.INSTANCE;
+
+                    dnn.SoftmaxBackward(algorithm, mode, alpha, yDesc.Value, yPtr, yDesc.Value, dyPtr, beta, xDesc.Value, dxPtr);
+                }
+
+                return;
+            }
+
+            throw new NotImplementedException();
+        }
+    }
 }

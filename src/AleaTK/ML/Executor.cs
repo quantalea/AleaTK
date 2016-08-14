@@ -117,6 +117,8 @@ namespace AleaTK.ML
             _backwardOrder = ((IEnumerable<Differentiable>) _forwardOrder).Reverse().ToList();
         }
 
+        public bool AssignAllGradient { get; set; } = false;
+
         public Context Context { get; }
 
         #region Set order
@@ -277,7 +279,7 @@ namespace AleaTK.ML
 
         public Task AssignGradient<T>(Variable<T> variable, Expr<T> expr)
         {
-            if (!variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
+            if (!AssignAllGradient && !variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
 
             var data = _data[variable];
             var counter = data.GradientAggregationCounter;
