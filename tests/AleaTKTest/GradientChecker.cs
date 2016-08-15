@@ -14,7 +14,8 @@ namespace AleaTKTest
         {
             return w =>
             {
-                executor.AssignTensor(input, w.AsTensor());
+                var inputTensor = executor.GetTensor(input);
+                executor.AssignTensor(input, w.AsTensor(inputTensor.Shape));
                 executor.Forward();
                 var o = executor.GetTensor(output).Reshape(-1);
                 return o.ToArray();

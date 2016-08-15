@@ -1,19 +1,12 @@
 ﻿using System;
-using System.CodeDom.Compiler;
-using System.Collections.Generic;
-using System.Data;
-using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using AleaTK;
 using AleaTK.ML;
 using AleaTK.ML.Operator;
-using AleaTKUtil;
 using NUnit.Framework;
 using static AleaTK.Library;
 using static AleaTK.ML.Library;
 using static AleaTKUtil.Common;
+using static AleaTKTest.Common;
 using Executor = AleaTK.ML.Executor;
 
 namespace AleaTKTest
@@ -418,14 +411,13 @@ namespace AleaTKTest
             var dVectors = exe.GetGradient(weightedReduce.Vectors);
 
             var dWeightsFd = GradientChecker.FiniteDifferenceGradient(exe, weights, weightedReduce.Output);
-            Common.AreClose(dWeightsFd, dWeights, 1e-2);
+            AreClose(dWeightsFd, dWeights, 1e-2);
 
             var dVectorsFd = GradientChecker.FiniteDifferenceGradient(exe, vectors, weightedReduce.Output);
-
-            var ss = dVectorsFd.Shape.AsArray;
+            AreClose(dVectorsFd, dVectors, 0.005);
 
             var dVectorsFdArray = dVectorsFd.Reshape(-1).ToArray();
-            var dVectorsBackpropArray = dWeights.Reshape(-1).ToArray();
+            var dVectorsBackpropArray = dVectors.Reshape(-1).ToArray();
             var err = MaxAbsDiff(dVectorsFdArray, dVectorsBackpropArray);
         }
 
