@@ -10,6 +10,8 @@ namespace AleaTKUtil
 {
     public static class Common
     {
+        public static Random Rng = new Random(42);
+
         public static double[,] RandMat(Random rng, int rows, int cols)
         {
             var mat = new double[rows, cols];
@@ -165,17 +167,145 @@ namespace AleaTKUtil
             }
         }
 
-        public static T[,] CreateArray2D<T>(int rows, int cols, Func<int, int, T> init)
+        public static Func<int, double> UniformRandomDouble(Random rng)
         {
-            var array = new T[rows, cols];
-            for (var row = 0; row < array.GetLength(0); ++row)
+            return i => rng.NextDouble();
+        }
+
+        public static Func<int, float> UniformRandomSingle(Random rng)
+        {
+            return i => (float)rng.NextDouble();
+        }
+
+        public static Func<int, int> UniformRandomInt(Random rng)
+        {
+            return i => rng.Next();
+        }
+
+        public static T[] CreateArray<T>(int n, Func<int, T> init)
+        {
+            var array = new T[n];
+            for (var i = 0; i < array.GetLength(0); ++i)
             {
-                for (var col = 0; col < array.GetLength(1); ++col)
+                array[i] = init(i);
+            }
+            return array;
+        }
+
+        public static void InitArray<T>(T[] array, Func<int, T> init)
+        {
+            for (var i = 0; i < array.GetLength(0); ++i)
+            {
+                array[i] = init(i);
+            }
+        }
+
+        public static void UniformRandomArray(double[] array, Random rng = null)
+        {
+            var gen = rng ?? Rng;
+            InitArray(array, i => gen.NextDouble());
+        }
+
+        public static void UniformRandomArray(float[] array, Random rng = null)
+        {
+            var gen = rng ?? Rng;
+            InitArray(array, i => (float)gen.NextDouble());
+        }
+
+        public static void UniformRandomArray(int[] array, Random rng = null)
+        {
+            var gen = rng ?? Rng;
+            InitArray(array, i => gen.Next());
+        }
+
+        public static T[,] CreateArray<T>(int n1, int n2, Func<int, int, T> init)
+        {
+            var array = new T[n1, n2];
+            for (var i = 0; i < array.GetLength(0); ++i)
+            {
+                for (var j = 0; j < array.GetLength(1); ++j)
                 {
-                    array[row, col] = init(row, col);
+                    array[i, j] = init(i, j);
                 }
             }
             return array;
+        }
+
+        public static void InitArray<T>(T[,] array, Func<int, int, T> init)
+        {
+            for (var i = 0; i < array.GetLength(0); ++i)
+            {
+                for (var j = 0; j < array.GetLength(1); ++j)
+                {
+                    array[i, j] = init(i, j);
+                }
+            }
+        }
+
+        public static void UniformRandomArray(double[,] array, Random rng = null)
+        {
+            var gen = rng ?? Rng;
+            InitArray(array, (i, j) => gen.NextDouble());
+        }
+
+        public static void UniformRandomArray(float[,] array, Random rng = null)
+        {
+            var gen = rng ?? Rng;
+            InitArray(array, (i, j) => (float)gen.NextDouble());
+        }
+
+        public static void UniformRandomArray(int[,] array, Random rng = null)
+        {
+            var gen = rng ?? Rng;
+            InitArray(array, (i, j) => gen.Next());
+        }
+
+        public static T[,,] CreateArray<T>(int n1, int n2, int n3, Func<int, int, int, T> init)
+        {
+            var array = new T[n1, n2, n3];
+            for (var i = 0; i < array.GetLength(0); ++i)
+            {
+                for (var j = 0; j < array.GetLength(1); ++j)
+                {
+                    for (var k = 0; k < array.GetLength(2); ++k)
+                    {
+                        array[i, j, k] = init(i, j, k);
+                    }
+                }
+            }
+            return array;
+        }
+
+        public static void InitArray<T>(T[,,] array, Func<int, int, int, T> init)
+        {
+            for (var i = 0; i < array.GetLength(0); ++i)
+            {
+                for (var j = 0; j < array.GetLength(1); ++j)
+                {
+                    for (var k = 0; k < array.GetLength(2); ++k)
+                    {
+                        array[i, j, k] = init(i, j, k);
+                    }
+                }
+            }
+        }
+
+        public static void UniformRandomArray(double[,,] array, Random rng = null)
+        {
+            var gen = rng ?? Rng;
+            InitArray(array, (i, j, k) => gen.NextDouble());
+        }
+
+        public static void UniformRandomArray(float[,,] array, Random rng = null)
+        {
+            var gen = rng ?? Rng;
+            InitArray(array, (i, j, k) => (float)gen.NextDouble());
+        }
+
+        public static void UniformRandomArray(int[,,] array, Random rng = null)
+        {
+            var gen = rng ?? Rng;
+            InitArray(array, (i, j, k) => gen.Next());
         }
 
         public static void AreClose(double[] expected, double[] actual, double error)
@@ -208,11 +338,11 @@ namespace AleaTKUtil
         {
             Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
             Assert.AreEqual(expected.GetLength(1), actual.GetLength(1));
-            for (var row = 0; row < expected.GetLength(0); ++row)
+            for (var i = 0; i < expected.GetLength(0); ++i)
             {
-                for (var col = 0; col < expected.GetLength(1); ++col)
+                for (var j = 0; j < expected.GetLength(1); ++j)
                 {
-                    Assert.AreEqual(expected[row, col], actual[row, col]);
+                    Assert.AreEqual(expected[i, j], actual[i, j]);
                 }
             }
         }
@@ -221,11 +351,11 @@ namespace AleaTKUtil
         {
             Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
             Assert.AreEqual(expected.GetLength(1), actual.GetLength(1));
-            for (var row = 0; row < expected.GetLength(0); ++row)
+            for (var i = 0; i < expected.GetLength(0); ++i)
             {
-                for (var col = 0; col < expected.GetLength(1); ++col)
+                for (var j = 0; j < expected.GetLength(1); ++j)
                 {
-                    Assert.That(actual[row, col], Is.EqualTo(expected[row, col]).Within(error));
+                    Assert.That(actual[i, j], Is.EqualTo(expected[i, j]).Within(error));
                 }
             }
         }
@@ -251,11 +381,11 @@ namespace AleaTKUtil
         {
             Assert.AreEqual(expected.GetLength(0), actual.GetLength(0));
             Assert.AreEqual(expected.GetLength(1), actual.GetLength(1));
-            for (var row = 0; row < expected.GetLength(0); ++row)
+            for (var i = 0; i < expected.GetLength(0); ++i)
             {
-                for (var col = 0; col < expected.GetLength(1); ++col)
+                for (var j = 0; j < expected.GetLength(1); ++j)
                 {
-                    Assert.That(actual[row, col], Is.EqualTo(expected[row, col]).Within(error));
+                    Assert.That(actual[i, j], Is.EqualTo(expected[i, j]).Within(error));
                 }
             }
         }

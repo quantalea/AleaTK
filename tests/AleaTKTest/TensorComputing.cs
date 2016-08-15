@@ -650,7 +650,7 @@ namespace AleaTKTest
             ctx.Assign(b, a);
             b.Print();
             var actual = b.ToArray2D();
-            var expected = CreateArray2D(333, 555, (row, col) => 5.0);
+            var expected = CreateArray(333, 555, (row, col) => 5.0);
             AreEqual(expected, actual);
         }
 
@@ -663,7 +663,7 @@ namespace AleaTKTest
             ctx.Assign(b, a);
             b.Print();
             var actual = b.ToArray2D();
-            var expected = CreateArray2D(333, 555, (row, col) => 5.0);
+            var expected = CreateArray(333, 555, (row, col) => 5.0);
             AreEqual(expected, actual);
         }
 
@@ -676,7 +676,7 @@ namespace AleaTKTest
             ctx.Assign(b, a);
             b.Print();
             var actual = b.ToArray2D();
-            var expected = CreateArray2D(333, 4, (row, col) => col + 1.0);
+            var expected = CreateArray(333, 4, (row, col) => col + 1.0);
             AreEqual(expected, actual);
         }
 
@@ -689,7 +689,7 @@ namespace AleaTKTest
             ctx.Assign(b, a);
             b.Print();
             var actual = b.ToArray2D();
-            var expected = CreateArray2D(333, 4, (row, col) => col + 1.0);
+            var expected = CreateArray(333, 4, (row, col) => col + 1.0);
             AreEqual(expected, actual);
         }
 

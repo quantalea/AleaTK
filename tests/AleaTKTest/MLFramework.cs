@@ -12,6 +12,7 @@ using AleaTK.ML.Operator;
 using NUnit.Framework;
 using static AleaTK.Library;
 using static AleaTK.ML.Library;
+using static AleaTKUtil.Common;
 using Executor = AleaTK.ML.Executor;
 
 namespace AleaTKTest
@@ -116,33 +117,6 @@ namespace AleaTKTest
 
         }
 
-        private static readonly Random _rng = new Random();
-
-        private static void RandArray(float[,] array)
-        {
-            for (var i = 0; i < array.GetLength(0); ++i)
-            {
-                for (var j = 0; j < array.GetLength(1); ++j)
-                {
-                    array[i, j] = (float)_rng.NextDouble();
-                }
-            }
-        }
-
-        private static void RandArray(float[,,] array)
-        {
-            for (var i = 0; i < array.GetLength(0); ++i)
-            {
-                for (var j = 0; j < array.GetLength(1); ++j)
-                {
-                    for (var k = 0; k < array.GetLength(2); ++k)
-                    {
-                        array[i, j, k] = (float)_rng.NextDouble();
-                    }
-                }
-            }
-        }
-
         public class Attention<T>
         {
             public Variable<T> EncoderHiddenStates { get; }
@@ -168,8 +142,8 @@ namespace AleaTKTest
                 // one goal is, try to make batchSize and encoderSeqLength unknown at symbol layer
                 // so, in LSTM outer op, we can create one graph and one sub-executor, and applied for
                 // different encoderSeqLength and batchSize.
-                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "EncoderHiddenStates layout: (encoderSeqLength, batch, encoderHiddenSize)");
-                Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "EncoderHiddenStates should be determined.");
+                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "Vectors layout: (encoderSeqLength, batch, encoderHiddenSize)");
+                Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "Vectors should be determined.");
                 EncoderHiddenSize = EncoderHiddenStates.Shape[2];
 
                 Util.EnsureEqual(2, DecoderHiddenStates.Shape.Rank, "DecoderHiddenStates layout: (batch, decoderHiddenSize)");
@@ -186,8 +160,8 @@ namespace AleaTKTest
                 V = Parameter(scaleV * (RandomUniform<T>(Shape.Create(AttentionDim, 1), 0UL, 0UL) - 0.5.AsScalar<T>()));
 
                 // build the graph
-                var h = EncoderHiddenStates.Reshape(-1, EncoderHiddenSize); // (n*b,He) // He denotes hiddenSize of encoder
-                var d = DecoderHiddenStates; // (b,Hd) // Hd denotes hiddenSize of decoder
+                var h = EncoderHiddenStates.Reshape(-1, EncoderHiddenSize); // (n*b,He) He denotes hiddenSize of encoder
+                var d = DecoderHiddenStates; // (b,Hd) Hd denotes hiddenSize of decoder
                 var whh = Dot(h, Wh); // shape (n*b,K) K denotes attentionDim
                 var wdd = Dot(d, Wd); // shape (b,K)
 
@@ -197,16 +171,16 @@ namespace AleaTKTest
                 // another issue is, our backward of add has some issue dealing with 3d array which has broadcast
                 // so, we can reshape them into 2d tensor here:
                 // initial shape: (n*b,K) + (b,K)
-                // reshape for the boadcast: (n,b*K) + (b*K) (for broadcasting, (b*K) will broadcast to (1,b*K)
+                // reshape for the boadcast: (n,b*K) + (b*K) and for broadcasting (b*K) will broadcast to (1,b*K)
                 // then: (n,b*K) + (b*K) = (n,b*K)
                 // reshape result to (n*b,K)
                 Batch = EncoderHiddenStates.Shape[1];
                 Util.EnsureTrue(Batch > 0, "Batch need to be determined.");
                 Util.EnsureTrue(Batch == DecoderHiddenStates.Shape[0]);
-                var add = (whh.Reshape(-1, Batch * AttentionDim) + wdd.Reshape(-1)).Reshape(-1, AttentionDim);
+                var sum = (whh.Reshape(-1, Batch * AttentionDim) + wdd.Reshape(-1)).Reshape(-1, AttentionDim);
 
                 // tanh, shape no change (n*b,K)
-                var whd = new ActivationTanh<T>(add);
+                var whd = new ActivationTanh<T>(sum);
 
                 // (n*b,K) dot (K,1) = (n*b,1) => reshape to (n,b)
                 var u = Dot(whd.Output, V).Reshape(-1, Batch);
@@ -238,10 +212,10 @@ namespace AleaTKTest
             // encoderSeqLength is flexibly at runtime
             var encoderSeqLength = 3;
             var dataEncoderHiddenStates = new float[encoderSeqLength, batch, encoderHiddenSize];
-            RandArray(dataEncoderHiddenStates);
+            AleaTKUtil.Common.UniformRandomArray(dataEncoderHiddenStates);
 
             var dataDecoderHiddenStates = new float[batch, decoderHiddenSize];
-            RandArray(dataDecoderHiddenStates);
+            UniformRandomArray(dataDecoderHiddenStates);
 
             exe.AssignTensor(encoderHiddenStates, dataEncoderHiddenStates.AsTensor());
             exe.AssignTensor(decoderHiddenStates, dataDecoderHiddenStates.AsTensor());
@@ -252,7 +226,7 @@ namespace AleaTKTest
             tensorOutput.Reshape(encoderSeqLength * batch, -1).Print();
 
             var dataDOutput = new float[encoderSeqLength, batch];
-            RandArray(dataDOutput);
+            UniformRandomArray(dataDOutput);
             exe.AssignGradientDirectly(attention.Output, dataDOutput.AsTensor());
             exe.Backward();
 
@@ -271,42 +245,41 @@ namespace AleaTKTest
             tensorDD.Print();
         }
 
-        public class AttentionReduce<T> : Differentiable
+        public class WeightedSumReduce<T> : Differentiable
         {
-            public AttentionReduce(Variable<T> softmax, Variable<T> encoderHiddenStates)
+            public WeightedSumReduce(Variable<T> weights, Variable<T> vectors)
             {
-                Softmax = softmax;
-                EncoderHiddenStates = encoderHiddenStates;
-                Batch = EncoderHiddenStates.Shape[1];
-                EncoderHiddenSize = EncoderHiddenStates.Shape[2];
-                Output = Variable<T>(PartialShape.Create(Batch, EncoderHiddenSize));
+                Weights = weights;
+                this.Vectors = vectors;
+                Batch = this.Vectors.Shape[1];
+                VectorSize = this.Vectors.Shape[2];
+                Output = Variable<T>(PartialShape.Create(Batch, VectorSize));
 
-                AddInput(Softmax);
-                AddInput(EncoderHiddenStates);
+                AddInput(Weights);
+                AddInput(this.Vectors);
                 AddOutput(Output);
             }
 
-            public Variable<T> Softmax { get; }
+            public Variable<T> Weights { get; }
 
-            public Variable<T> EncoderHiddenStates { get; }
+            public Variable<T> Vectors { get; }
 
             public Variable<T> Output { get; }
 
             public long Batch { get; }
 
-            public long EncoderHiddenSize { get; }
+            public long VectorSize { get; }
 
             public override void Forward(Executor executor)
             {
-                var h = executor.GetTensor(EncoderHiddenStates);
-                var a = executor.GetTensor(Softmax);
-                var n = h.Shape[0];
+                var vectors = executor.GetTensor(Vectors);
+                var weights = executor.GetTensor(Weights);
+                var n = vectors.Shape[0];
                 var b = Batch;
-                var d = EncoderHiddenSize;
-                //var y = executor.GetTensor(Output, Shape.Create(b, d));
+                var d = VectorSize;
 
-                var mul = (a.Reshape(n*b, 1)*h.Reshape(n*b, d)).Reshape(n, b*d);
-                var reduce = ReduceSum(mul, 0).Reshape(b, d);
+                var prod = (weights.Reshape(n, 1)*vectors.Reshape(n, b*d)).Reshape(n, b*d);
+                var reduce = ReduceSum(prod, 0).Reshape(b, d);
 
                 executor.AssignTensor(Output, reduce);
             }
@@ -342,8 +315,8 @@ namespace AleaTKTest
                 // one goal is, try to make batchSize and encoderSeqLength unknown at symbol layer
                 // so, in LSTM outer op, we can create one graph and one sub-executor, and applied for
                 // different encoderSeqLength and batchSize.
-                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "EncoderHiddenStates layout: (encoderSeqLength, batch, encoderHiddenSize)");
-                Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "EncoderHiddenStates should be determined.");
+                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "Vectors layout: (encoderSeqLength, batch, encoderHiddenSize)");
+                Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "Vectors should be determined.");
                 EncoderHiddenSize = EncoderHiddenStates.Shape[2];
 
                 Util.EnsureEqual(2, DecoderHiddenStates.Shape.Rank, "DecoderHiddenStates layout: (batch, decoderHiddenSize)");
@@ -388,10 +361,53 @@ namespace AleaTKTest
                 // same shape (n,b)
                 var softmax = new Softmax<T>(u);
 
-                var reduce = new AttentionReduce<T>(softmax.Output, EncoderHiddenStates);
+                var reduce = new WeightedSumReduce<T>(softmax.Output, EncoderHiddenStates);
 
                 Output = reduce.Output;
             }
+        }
+
+        [Test]
+        public static void TestWeightedReduction()
+        {
+            var seqLength = 3;
+            var batch = 4;
+            var vectorSize = 5;
+
+            var weights = Variable<float>(PartialShape.Create(seqLength));
+            var vectors = Variable<float>(PartialShape.Create(-1, batch, vectorSize));
+            var weightedReduce = new WeightedSumReduce<float>(weights, vectors);
+
+            var ctx = Context.GpuContext(0);
+            var exe = new Executor(ctx, weightedReduce.Output) { AssignAllGradient = true };
+            exe.Initalize();
+
+            var vectorsData = new float[seqLength, batch, vectorSize];
+            UniformRandomArray(vectorsData);
+            exe.AssignTensor(vectors, vectorsData.AsTensor());
+
+            var weightsData = new float[seqLength];
+            UniformRandomArray(weightsData);
+            exe.AssignTensor(weights, weightsData.AsTensor());
+
+            var expected = new float[batch, vectorSize];
+            for (var b = 0; b < batch; ++b)
+            {
+                for (var k = 0; k < vectorSize; ++k)
+                {
+                    var sum = 0.0f;
+                    for (var i = 0; i < seqLength; ++i)
+                    {
+                        sum += weightsData[i]*vectorsData[i, b, k];
+                    }
+                    expected[b, k] = sum;
+                }
+            }
+
+            exe.Forward();
+
+            var output = exe.GetTensor(weightedReduce.Output);
+            AreClose(expected, output.ToArray2D(), 1e-6);
         }
 
         [Test]
@@ -414,10 +430,10 @@ namespace AleaTKTest
             // encoderSeqLength is flexibly at runtime
             var encoderSeqLength = 3;
             var dataEncoderHiddenStates = new float[encoderSeqLength, batch, encoderHiddenSize];
-            RandArray(dataEncoderHiddenStates);
+            UniformRandomArray(dataEncoderHiddenStates);
 
             var dataDecoderHiddenStates = new float[batch, decoderHiddenSize];
-            RandArray(dataDecoderHiddenStates);
+            UniformRandomArray(dataDecoderHiddenStates);
 
             exe.AssignTensor(encoderHiddenStates, dataEncoderHiddenStates.AsTensor());
             exe.AssignTensor(decoderHiddenStates, dataDecoderHiddenStates.AsTensor());
@@ -428,7 +444,7 @@ namespace AleaTKTest
             tensorOutput.Print();
 
             //var dataDOutput = new float[encoderSeqLength, batch];
-            //RandArray(dataDOutput);
+            //UniformRandomArray(dataDOutput);
             //exe.AssignGradientDirectly(attention.Output, dataDOutput.AsTensor());
             //exe.Backward();
 
@@ -438,7 +454,7 @@ namespace AleaTKTest
             //var tensorDWd = exe.GetGradient(attention.Wd);
             //tensorDWd.Print();
 
-            //var tensorDH = exe.GetGradient(attention.EncoderHiddenStates);
+            //var tensorDH = exe.GetGradient(attention.Vectors);
             //Console.WriteLine(tensorDH.Shape);
             //tensorDH.Reshape(-1, encoderHiddenSize).Print();
 
