@@ -96,13 +96,13 @@ namespace Tutorial.Samples
             return gradient;
         }
 
-        public static Tensor<T> GetGradient(Executor executor, Variable<T> var, Shape shape, bool zerolize = false)
+        public static Tensor<T> GetGradient(Executor executor, Variable<T> var, Shape shape, bool zero = false)
         {
             var ctx = executor.Context;
             var data = executor.GetData(var);
             Util.EnsureTrue(data.GradientAggregationCounter == 0);
             var gradient = executor.GetGradient(var, shape);
-            if (zerolize) ctx.Assign(gradient, Fill(shape, ScalarOps.Conv<T>(0.0)));
+            if (zero) ctx.Assign(gradient, Fill(shape, ScalarOps.Conv<T>(0.0)));
             return gradient;
         }
 
@@ -232,7 +232,7 @@ namespace Tutorial.Samples
             var difoa1 = GetGradient(executor, IFOA1, ifoa2.Shape);
             var difoa2 = GetGradient(executor, IFOA2, ifoa2.Shape);
             var dhin = GetGradient(executor, Hin, zerolize: true);
-            var dhout = GetGradient(executor, Hout, dy.Shape, zerolize: true);
+            var dhout = GetGradient(executor, Hout, dy.Shape, zero: true);
             var dhx = GetGradient(executor, HX, zerolize: true);
             var dcx = GetGradient(executor, CX, zerolize: true);
 

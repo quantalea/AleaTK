@@ -37,11 +37,15 @@ namespace AleaTKTest
             var opt = new GradientDescentOptimizer(ctx, loss, learn);
 
             // set some data
-            var rng = new Random(42);
-            var _input = RandMat(rng, N, D);
-            var _label = Dot(_input, RandMat(rng, D, P)).Add(RandMat(rng, N, P).Mul(0.1));
-            opt.AssignTensor(input, _input.AsTensor());
-            opt.AssignTensor(label, _label.AsTensor());
+            var inputData = new double[N, D];
+            var matA = new double[N, P];
+            var matB = new double[N, P];
+            NormalRandomArray(inputData);
+            NormalRandomArray(matA);
+            NormalRandomArray(matB);
+            var labelData = Dot(inputData, matA).Add(matB.Mul(0.1));
+            opt.AssignTensor(input, inputData.AsTensor());
+            opt.AssignTensor(label, labelData.AsTensor());
 
             opt.Initalize();
             for (var i = 0; i < 800; ++i)

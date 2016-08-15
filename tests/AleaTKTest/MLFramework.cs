@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using AleaTK;
 using AleaTK.ML;
 using AleaTK.ML.Operator;
+using AleaTKUtil;
 using NUnit.Framework;
 using static AleaTK.Library;
 using static AleaTK.ML.Library;
@@ -245,6 +246,14 @@ namespace AleaTKTest
             tensorDD.Print();
         }
 
+        /// <summary>
+        /// Calculates the weighted sum
+        /// 
+        ///     c_{b, k} = \sum_{i = 0}^n a_i h_{i, b, k} 
+        ///  
+        /// with weight vector a \in \mathbb{R}^n.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
         public class WeightedSumReduce<T> : Differentiable
         {
             public WeightedSumReduce(Variable<T> weights, Variable<T> vectors)
@@ -280,13 +289,22 @@ namespace AleaTKTest
 
                 var prod = (weights.Reshape(n, 1)*vectors.Reshape(n, b*d)).Reshape(n, b*d);
                 var reduce = ReduceSum(prod, 0).Reshape(b, d);
-
                 executor.AssignTensor(Output, reduce);
             }
 
             public override void Backward(Executor executor)
             {
-                throw new NotImplementedException();
+                var vectors = executor.GetTensor(Vectors);
+                var weights = executor.GetTensor(Weights);
+                var n = vectors.Shape[0];
+                var b = Batch;
+                var d = VectorSize;
+
+                var dOutput = executor.GetGradient(Output);
+                var dWeights = Dot(vectors.Reshape(-1, b*d), dOutput.Reshape(b*d, -1)).Reshape(n);
+                var dVectors = Dot(weights.Reshape(n, 1), dOutput.Reshape(1, b*d)).Reshape(n, b, d);
+                executor.AssignGradient(Weights, dWeights);
+                executor.AssignGradient(Vectors, dVectors);
             }
         }
 
@@ -368,11 +386,16 @@ namespace AleaTKTest
         }
 
         [Test]
-        public static void TestWeightedReduction()
+        public static void TestWeightedReductionEvaluator()
         {
             var seqLength = 3;
             var batch = 4;
             var vectorSize = 5;
+
+            var vectorsData = new float[seqLength, batch, vectorSize];
+            UniformRandomArray(vectorsData);
+            var weightsData = new float[seqLength];
+            UniformRandomArray(weightsData);
 
             var weights = Variable<float>(PartialShape.Create(seqLength));
             var vectors = Variable<float>(PartialShape.Create(-1, batch, vectorSize));
@@ -382,32 +405,28 @@ namespace AleaTKTest
             var exe = new Executor(ctx, weightedReduce.Output) { AssignAllGradient = true };
             exe.Initalize();
 
-            var vectorsData = new float[seqLength, batch, vectorSize];
-            UniformRandomArray(vectorsData);
-            exe.AssignTensor(vectors, vectorsData.AsTensor());
+            var dOutputData = new float[batch, vectorSize];
+            UniformRandomArray(dOutputData);
 
-            var weightsData = new float[seqLength];
-            UniformRandomArray(weightsData);
             exe.AssignTensor(weights, weightsData.AsTensor());
-
-            var expected = new float[batch, vectorSize];
-            for (var b = 0; b < batch; ++b)
-            {
-                for (var k = 0; k < vectorSize; ++k)
-                {
-                    var sum = 0.0f;
-                    for (var i = 0; i < seqLength; ++i)
-                    {
-                        sum += weightsData[i]*vectorsData[i, b, k];
-                    }
-                    expected[b, k] = sum;
-                }
-            }
-
+            exe.AssignTensor(vectors, vectorsData.AsTensor());
             exe.Forward();
+            exe.AssignGradientDirectly(weightedReduce.Output, dOutputData.AsTensor());
+            exe.Backward();
 
-            var output = exe.GetTensor(weightedReduce.Output);
-            AreClose(expected, output.ToArray2D(), 1e-6);
+            var dWeights = exe.GetGradient(weightedReduce.Weights);
+            var dVectors = exe.GetGradient(weightedReduce.Vectors);
+
+            var dWeightsFd = GradientChecker.FiniteDifferenceGradient(exe, weights, weightedReduce.Output);
+            Common.AreClose(dWeightsFd, dWeights, 1e-2);
+
+            var dVectorsFd = GradientChecker.FiniteDifferenceGradient(exe, vectors, weightedReduce.Output);
+
+            var ss = dVectorsFd.Shape.AsArray;
+
+            var dVectorsFdArray = dVectorsFd.Reshape(-1).ToArray();
+            var dVectorsBackpropArray = dWeights.Reshape(-1).ToArray();
+            var err = MaxAbsDiff(dVectorsFdArray, dVectorsBackpropArray);
         }
 
         [Test]
