@@ -101,6 +101,31 @@ namespace AleaTK
 
             return dstShape;
         }
+
+        public static PartialShape Broadcast(params PartialShape[] shapes)
+        {
+            // get the highest rank
+            var rank = shapes.Select(shape => shape.Rank).Max();
+
+            // extend shapes to that rank
+            var extenededShapes =
+                shapes.Select(shape => new PartialShape(Enumerable.Repeat(1L, rank - shape.Rank).Concat(shape).ToArray()))
+                      .ToArray();
+
+            // get the target length, also check if it breaks the rule
+            var lengths = Enumerable.Range(0, rank).Select(dimension =>
+            {
+                var length = extenededShapes.Select(shape => shape[dimension]).Max();
+                if (extenededShapes.Any(shape => shape[dimension] != -1 && shape[dimension] != 1L && shape[dimension] != length))
+                {
+                    var shapesStr = string.Join(",", shapes.Select(x => x.ToString()));
+                    throw new InvalidOperationException($"Wrong shape operation, cannot broadcast. {shapesStr}");
+                }
+                return length;
+            }).ToArray();
+
+            return new PartialShape(lengths);
+        }
     }
 
     public sealed class Shape : DimensionProperties<long>

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using AleaTK;
 using AleaTK.ML;
 using AleaTK.ML.Operator;
@@ -252,13 +253,23 @@ namespace AleaTKTest
             public WeightedSumReduce(Variable<T> weights, Variable<T> vectors)
             {
                 Weights = weights;
-                this.Vectors = vectors;
-                Batch = this.Vectors.Shape[1];
-                VectorSize = this.Vectors.Shape[2];
-                Output = Variable<T>(PartialShape.Create(Batch, VectorSize));
+                Vectors = vectors;
+
+                // output shape is the broadcast of w*v, skip the first dimension
+                // currently the reduce is fixed on first dimension
+                if (weights.HasShape && vectors.HasShape)
+                {
+                    var shape = PartialShape.Broadcast(weights.Shape, vectors.Shape);
+                    Output = Variable<T>(PartialShape.Create(shape.Skip(1).ToArray()));
+                }
+                else
+                {
+                    Output = Variable<T>();
+                }
+                //Output = Variable<T>();
 
                 AddInput(Weights);
-                AddInput(this.Vectors);
+                AddInput(Vectors);
                 AddOutput(Output);
             }
 
@@ -268,20 +279,19 @@ namespace AleaTKTest
 
             public Variable<T> Output { get; }
 
-            public long Batch { get; }
-
-            public long VectorSize { get; }
-
             public override void Forward(Executor executor)
             {
                 var vectors = executor.GetTensor(Vectors);
                 var weights = executor.GetTensor(Weights);
-                var n = vectors.Shape[0];
-                var b = Batch;
-                var d = VectorSize;
+                
+                // the result of prod need to be reshape to matrix for later to do dot
+                var l0 = Math.Max(weights.Shape[0], vectors.Shape[0]);
+                var prod = (weights*vectors).Reshape(l0, -1);
 
-                var prod = (weights.Reshape(n, 1)*vectors.Reshape(n, b*d)).Reshape(n, b*d);
-                var reduce = ReduceSum(prod, 0).Reshape(b, d);
+                // after dot, it will reshape back to what they should be
+                var shape = Shape.Broadcast(weights.Shape, vectors.Shape).Skip(1).ToArray();
+                var reduce = ReduceSum(prod, 0).Reshape(shape);
+
                 executor.AssignTensor(Output, reduce);
             }
 
@@ -289,15 +299,29 @@ namespace AleaTKTest
             {
                 var vectors = executor.GetTensor(Vectors);
                 var weights = executor.GetTensor(Weights);
-                var n = vectors.Shape[0];
-                var b = Batch;
-                var d = VectorSize;
-
                 var dOutput = executor.GetGradient(Output);
-                var dWeights = Dot(vectors.Reshape(-1, b*d), dOutput.Reshape(b*d, -1)).Reshape(n);
-                var dVectors = Dot(weights.Reshape(n, 1), dOutput.Reshape(1, b*d)).Reshape(n, b, d);
-                executor.AssignGradient(Weights, dWeights);
-                executor.AssignGradient(Vectors, dVectors);
+                
+                //var n = vectors.Shape[0];
+                //var b = Batch;
+                //var d = VectorSize;
+
+                var l0 = Math.Max(weights.Shape[0], vectors.Shape[0]);
+
+                // issue:
+                // v.shape -> (n, b, d)
+                // w.shape -> (n, b, 1)
+                // NOTE, the weight here has no meaning, it might be NOT learnable!
+                // o.shape -> (b, d)
+                // the dv, dw, and do shape are same as there tensor shape
+                // so v dot dO => (n, b*d) dot (b*d, 1) => (n,1)
+                // w dot dO    => (n, b) dot (b*d, 1) => ???
+
+
+                //var dWeights = Dot(vectors.Reshape(-1, b*d), dOutput.Reshape(b*d, -1)).Reshape(n);
+                //var dVectors = Dot(weights.Reshape(n, 1), dOutput.Reshape(1, b*d)).Reshape(n, b, d);
+                //executor.AssignGradient(Weights, dWeights);
+                //executor.AssignGradient(Vectors, dVectors);
+
             }
         }
 
@@ -372,7 +396,8 @@ namespace AleaTKTest
                 // same shape (n,b)
                 var softmax = new Softmax<T>(u);
 
-                var reduce = new WeightedSumReduce<T>(softmax.Output, EncoderHiddenStates);
+                // sum (n,b) * (n,b,d)
+                var reduce = new WeightedSumReduce<T>(softmax.Output.Reshape(-1, Batch, 1), EncoderHiddenStates);
 
                 Output = reduce.Output;
             }

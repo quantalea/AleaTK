@@ -236,14 +236,20 @@ namespace AleaTK
             Util.EnsureTrue(broadcastShape.Rank >= shape.Rank);
 
             // all inner broadcasting
-            if (broadcastShape.Skip(broadcastShape.Rank - shape.Rank).Zip(shape, (l1, l2) => l1 == l2).All(pred => pred))
+            var firstNonOneIndex = shape.FirstIndex(l => l != 1L);
+            var innerShape = firstNonOneIndex < shape.Rank - 1
+                ? Shape.Create(shape.Skip(firstNonOneIndex + 1).ToArray())
+                : shape;
+            if (broadcastShape.Skip(broadcastShape.Rank - innerShape.Rank).Zip(shape, (l1, l2) => l1 == l2).All(pred => pred))
             {
-                var length = shape.Length;
+                var length = innerShape.Length;
                 // ReSharper disable once PossibleNullReferenceException
                 if (stride == 1L) return i => rawReader(i % length);
                 // ReSharper disable once PossibleNullReferenceException
                 return i => rawReader((i % length) * stride);
             }
+
+            var strides = Layout.Strides;
 
             // non-all-inner broadcasting
             if (broadcastShape.Rank == 2)
@@ -253,6 +259,26 @@ namespace AleaTK
                 if (stride == 1L) return i => rawReader(i/dstCols);
                 // ReSharper disable once PossibleNullReferenceException
                 return i => rawReader((i/dstCols)*stride);
+            }
+
+            if (broadcastShape.Rank == 3)
+            {
+                if (Layout.Rank == 3)
+                {
+                    var length1 = broadcastShape[1];
+                    var length2 = broadcastShape[2];
+                    var stride0 = shape[0] == broadcastShape[0] ? strides[0] : 0;
+                    var stride1 = shape[1] == broadcastShape[1] ? strides[1] : 0;
+                    var stride2 = shape[2] == broadcastShape[2] ? strides[2] : 0;
+                    return i =>
+                    {
+                        var i0 = i/(length1*length2);
+                        var i1 = i%(length1*length2)/length2;
+                        var i2 = i%(length1*length2)%length2;
+                        var idx = i0*stride0 + i1*stride1 + i2*stride2;
+                        return rawReader(idx);
+                    };
+                }
             }
 
             throw new NotImplementedException();
