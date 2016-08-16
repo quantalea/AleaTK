@@ -268,25 +268,24 @@ namespace AleaTK
 
             if (broadcastShape.Rank == 3)
             {
-                if (Layout.Rank == 3)
+                // extend shapes to that rank
+                var extenededShape = new Shape(Enumerable.Repeat(1L, broadcastShape.Rank - shape.Rank).Concat(shape).ToArray());
+                var length1 = broadcastShape[1];
+                var length2 = broadcastShape[2];
+                var stride0 = extenededShape[0] == broadcastShape[0] ? extenededShape[1]*extenededShape[2]*stride : 0;
+                var stride1 = extenededShape[1] == broadcastShape[1] ? extenededShape[2] * stride : 0;
+                var stride2 = extenededShape[2] == broadcastShape[2] ? stride : 0;
+                return i =>
                 {
-                    var length1 = broadcastShape[1];
-                    var length2 = broadcastShape[2];
-                    var stride0 = shape[0] == broadcastShape[0] ? strides[0] : 0;
-                    var stride1 = shape[1] == broadcastShape[1] ? strides[1] : 0;
-                    var stride2 = shape[2] == broadcastShape[2] ? strides[2] : 0;
-                    return i =>
-                    {
-                        var i0 = i/(length1*length2);
-                        var i1 = i%(length1*length2)/length2;
-                        var i2 = i%(length1*length2)%length2;
-                        var idx = i0*stride0 + i1*stride1 + i2*stride2;
-                        return rawReader(idx);
-                    };
-                }
+                    var i0 = i/(length1*length2);
+                    var i1 = i%(length1*length2)/length2;
+                    var i2 = i%(length1*length2)%length2;
+                    var idx = i0*stride0 + i1*stride1 + i2*stride2;
+                    return rawReader(idx);
+                };
             }
 
-            throw new NotImplementedException();
+            throw new NotImplementedException($"{shape} => {broadcastShape}");
         }
 
         public Func<long, long, T> GetReader2(Shape broadcastShape = null)

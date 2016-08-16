@@ -263,8 +263,12 @@ namespace AleaTKTest
                 var weights = executor.GetTensor(Weights);
                 var dOutput = executor.GetGradient(Output);
 
+                Console.WriteLine((vectors * dOutput).Shape);
                 executor.AssignGradient(Vectors, weights*dOutput);
-                executor.AssignGradient(Weights, vectors*dOutput);
+                
+
+                throw new Exception("TODO");
+                //executor.AssignGradient(softmax, vectors*dOutput);
             }
         }
 
@@ -321,6 +325,61 @@ namespace AleaTKTest
 
             AreClose(hdx.ToArray2D(), tdx.ToArray2D(), 1e-7);
             AreClose(hdw.ToArray2D(), tdw.ToArray2D(), 1e-7);
+        }
+        
+        [Test]
+        public static void Gradient_WeightedSumReduce_02_GPU()
+        {
+            var rng = new Random(42);
+            var x = Variable<double>();
+            var w = Variable<double>();
+            var wsr = new WeightedSumReduce<double>(w.Reshape(-1, 1), x);
+            var y = wsr.Output;
+
+            var ctx = gpu;
+            var exe = new Executor(ctx, y) { AssignAllGradient = true };
+
+            var n = 5;
+            var d = 3;
+            var hx = new double[n, d];
+            var hw = new double[n];
+            UniformRandomArray(hx, rng);
+            UniformRandomArray(hw, rng);
+            var hy = new double[d];
+            for (var i = 0; i < d; ++i)
+            {
+                var acc = 0.0;
+                for (var j = 0; j < n; ++j)
+                {
+                    acc += hw[j] * hx[j, i];
+                }
+                hy[i] = acc;
+            }
+
+            exe.AssignTensor(x, hx.AsTensor());
+            exe.AssignTensor(w, hw.AsTensor());
+            exe.Forward();
+            var ty = exe.GetTensor(y);
+            ty.Print();
+            AreClose(hy, ty.ToArray(), 1e-10);
+
+            var hdy = new double[d];
+            UniformRandomArray(hdy, rng);
+            exe.AssignGradientDirectly(y, hdy.AsTensor());
+            exe.Backward();
+            //var tdx = exe.GetGradient(x);
+            //var tdw = exe.GetGradient(w);
+            //tdx.Print();
+            //tdw.Print();
+
+            //var bump = 1e-8;
+            //var hdx = GradientChecker.FiniteDifferenceGradient(exe, x, bump: bump);
+            ////var hdw = GradientChecker.FiniteDifferenceGradient(exe, w, bump: bump);
+            //hdx.Print();
+            ////hdw.Print();
+
+            //AreClose(hdx.ToArray2D(), tdx.ToArray2D(), 1e-7);
+            ////AreClose(hdw.ToArray2D(), tdw.ToArray2D(), 1e-7);
         }
     }
 }

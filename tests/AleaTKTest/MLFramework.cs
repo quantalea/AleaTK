@@ -137,8 +137,8 @@ namespace AleaTKTest
                 // one goal is, try to make batchSize and encoderSeqLength unknown at symbol layer
                 // so, in LSTM outer op, we can create one graph and one sub-executor, and applied for
                 // different encoderSeqLength and batchSize.
-                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "Vectors layout: (encoderSeqLength, batch, encoderHiddenSize)");
-                Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "Vectors should be determined.");
+                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "states layout: (encoderSeqLength, batch, encoderHiddenSize)");
+                Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "states should be determined.");
                 EncoderHiddenSize = EncoderHiddenStates.Shape[2];
 
                 Util.EnsureEqual(2, DecoderHiddenStates.Shape.Rank, "DecoderHiddenStates layout: (batch, decoderHiddenSize)");
@@ -301,7 +301,7 @@ namespace AleaTKTest
                 var weights = executor.GetTensor(Weights);
                 var dOutput = executor.GetGradient(Output);
                 
-                //var n = vectors.Shape[0];
+                //var n = states.Shape[0];
                 //var b = Batch;
                 //var d = VectorSize;
 
@@ -317,12 +317,126 @@ namespace AleaTKTest
                 // w dot dO    => (n, b) dot (b*d, 1) => ???
 
 
-                //var dWeights = Dot(vectors.Reshape(-1, b*d), dOutput.Reshape(b*d, -1)).Reshape(n);
-                //var dVectors = Dot(weights.Reshape(n, 1), dOutput.Reshape(1, b*d)).Reshape(n, b, d);
-                //executor.AssignGradient(Weights, dWeights);
-                //executor.AssignGradient(Vectors, dVectors);
+                //var dWeights = Dot(states.Reshape(-1, b*d), dOutput.Reshape(b*d, -1)).Reshape(n);
+                //var dVectors = Dot(softmax.Reshape(n, 1), dOutput.Reshape(1, b*d)).Reshape(n, b, d);
+                //executor.AssignGradient(softmax, dWeights);
+                //executor.AssignGradient(states, dVectors);
 
             }
+        }
+
+        public class AttentionReduce<T> : Differentiable
+        {
+            public AttentionReduce(Variable<T> softmax, Variable<T> states)
+            {
+                Softmax = softmax;
+                States = states;
+
+                Util.EnsureTrue(softmax.Shape.Rank == 2, "Softmax: (n,b)");
+                Util.EnsureTrue(states.Shape.Rank == 3, "States: (n,b,d)");
+                Util.EnsureTrue(softmax.Shape[1] > 0, "Softmax: b needed.");
+                Util.EnsureTrue(states.Shape[1] > 0, "States: b needed.");
+                Util.EnsureTrue(states.Shape[2] > 0, "States: d needed.");
+                Util.EnsureTrue(softmax.Shape[1] == states.Shape[1], "b should match.");
+
+                BatchSize = softmax.Shape[1];
+                StatesSize = states.Shape[2];
+
+                Output = Variable<T>(PartialShape.Create(BatchSize, StatesSize));
+
+                AddInput(Softmax);
+                AddInput(States);
+                AddOutput(Output);
+            }
+
+            public Variable<T> Softmax { get; }
+
+            public Variable<T> States { get; }
+
+            public Variable<T> Output { get; }
+
+            public long BatchSize { get; }
+
+            public long StatesSize { get; }
+
+            public override void Forward(Executor executor)
+            {
+                var states = executor.GetTensor(States);
+                var softmax = executor.GetTensor(Softmax);
+                var n = states.Shape[0];
+                var b = states.Shape[1];
+                var d = states.Shape[2];
+
+                var prod = softmax.Reshape(n, b, 1)*states;
+
+                // currently reduce sum only works up to 2d tensor
+                // then we do a reduce to make it an 2d tensor
+                // after reduce, we reshape it back.
+                var reduce = ReduceSum(prod.Reshape(n, b*d), 0).Reshape(b, d);
+
+                executor.AssignTensor(Output, reduce);
+            }
+
+            public override void Backward(Executor executor)
+            {
+                var states = executor.GetTensor(States);
+                var softmax = executor.GetTensor(Softmax);
+                var dOutput = executor.GetGradient(Output);
+                var n = states.Shape[0];
+                var b = states.Shape[1];
+                var d = states.Shape[2];
+
+                executor.AssignGradient(States, softmax.Reshape(n,b,1)*dOutput);
+
+                // states (n,b,d) * dOutput (b,d) => (n,b,d)
+                // softmax (n,b)
+                executor.AssignGradient(Softmax, ReduceSum((states*dOutput).Reshape(n*b, d), 1).Reshape(n, b));
+            }
+        }
+
+        [Test]
+        public static void TestWeightedReductionEvaluator()
+        {
+            var n = 3;
+            var b = 4;
+            var d = 5;
+
+            var statesData = new double[n, b, d];
+            UniformRandomArray(statesData);
+            var softmaxData = new double[n, b];
+            UniformRandomArray(softmaxData);
+
+            var softmax = Variable<double>(PartialShape.Create(-1, b));
+            var states = Variable<double>(PartialShape.Create(-1, b, d));
+            var reduce = new AttentionReduce<double>(softmax, states);
+
+            var ctx = Context.GpuContext(0);
+            var exe = new Executor(ctx, reduce.Output) { AssignAllGradient = true };
+            exe.Initalize();
+
+            var dOutputData = new double[b, d];
+            UniformRandomArray(dOutputData);
+
+            exe.AssignTensor(softmax, softmaxData.AsTensor());
+            exe.AssignTensor(states, statesData.AsTensor());
+            exe.Forward();
+            exe.AssignGradientDirectly(reduce.Output, dOutputData.AsTensor());
+            exe.Backward();
+
+            var dSoftmax = exe.GetGradient(reduce.Softmax);
+            var dStates = exe.GetGradient(reduce.States);
+
+            var bump = 1e-6;
+
+            var dSoftmaxFd = GradientChecker.FiniteDifferenceGradient(exe, softmax, bump: bump);
+            AreClose(dSoftmaxFd.ToArray2D(), dSoftmax.ToArray2D(), 1e-7);
+
+            var dStatesFd = GradientChecker.FiniteDifferenceGradient(exe, states, bump: bump);
+            AreClose(dStatesFd.ToArray3D(), dStates.ToArray3D(), 1e-7);
+
+            //var dVectorsFdArray = dVectorsFd.Reshape(-1).ToArray();
+            //var dVectorsBackpropArray = dStates.Reshape(-1).ToArray();
+            //var err = MaxAbsDiff(dVectorsFdArray, dVectorsBackpropArray);
         }
 
         public class Attention2<T>
@@ -350,8 +464,8 @@ namespace AleaTKTest
                 // one goal is, try to make batchSize and encoderSeqLength unknown at symbol layer
                 // so, in LSTM outer op, we can create one graph and one sub-executor, and applied for
                 // different encoderSeqLength and batchSize.
-                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "Vectors layout: (encoderSeqLength, batch, encoderHiddenSize)");
-                Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "Vectors should be determined.");
+                Util.EnsureEqual(3, EncoderHiddenStates.Shape.Rank, "states layout: (encoderSeqLength, batch, encoderHiddenSize)");
+                Util.EnsureTrue(EncoderHiddenStates.Shape[2] > 0, "states should be determined.");
                 EncoderHiddenSize = EncoderHiddenStates.Shape[2];
 
                 Util.EnsureEqual(2, DecoderHiddenStates.Shape.Rank, "DecoderHiddenStates layout: (batch, decoderHiddenSize)");
@@ -397,53 +511,10 @@ namespace AleaTKTest
                 var softmax = new Softmax<T>(u);
 
                 // sum (n,b) * (n,b,d)
-                var reduce = new WeightedSumReduce<T>(softmax.Output.Reshape(-1, Batch, 1), EncoderHiddenStates);
+                var reduce = new AttentionReduce<T>(softmax.Output.Reshape(-1, Batch), EncoderHiddenStates);
 
                 Output = reduce.Output;
             }
-        }
-
-        [Test]
-        public static void TestWeightedReductionEvaluator()
-        {
-            var seqLength = 3;
-            var batch = 4;
-            var vectorSize = 5;
-
-            var vectorsData = new float[seqLength, batch, vectorSize];
-            UniformRandomArray(vectorsData);
-            var weightsData = new float[seqLength];
-            UniformRandomArray(weightsData);
-
-            var weights = Variable<float>(PartialShape.Create(seqLength));
-            var vectors = Variable<float>(PartialShape.Create(-1, batch, vectorSize));
-            var weightedReduce = new WeightedSumReduce<float>(weights, vectors);
-
-            var ctx = Context.GpuContext(0);
-            var exe = new Executor(ctx, weightedReduce.Output) { AssignAllGradient = true };
-            exe.Initalize();
-
-            var dOutputData = new float[batch, vectorSize];
-            UniformRandomArray(dOutputData);
-
-            exe.AssignTensor(weights, weightsData.AsTensor());
-            exe.AssignTensor(vectors, vectorsData.AsTensor());
-            exe.Forward();
-            exe.AssignGradientDirectly(weightedReduce.Output, dOutputData.AsTensor());
-            exe.Backward();
-
-            var dWeights = exe.GetGradient(weightedReduce.Weights);
-            var dVectors = exe.GetGradient(weightedReduce.Vectors);
-
-            var dWeightsFd = GradientChecker.FiniteDifferenceGradient(exe, weights, output: weightedReduce.Output);
-            AreClose(dWeightsFd, dWeights, 1e-2);
-
-            var dVectorsFd = GradientChecker.FiniteDifferenceGradient(exe, vectors, output: weightedReduce.Output);
-            AreClose(dVectorsFd, dVectors, 0.005);
-
-            var dVectorsFdArray = dVectorsFd.Reshape(-1).ToArray();
-            var dVectorsBackpropArray = dVectors.Reshape(-1).ToArray();
-            var err = MaxAbsDiff(dVectorsFdArray, dVectorsBackpropArray);
         }
 
         [Test]
@@ -455,9 +526,9 @@ namespace AleaTKTest
             var attentionDim = 3;
 
             // (encoderSeqLength, batch, encoderHiddenSize)
-            var encoderHiddenStates = Variable<float>(PartialShape.Create(-1, batch, encoderHiddenSize));
-            var decoderHiddenStates = Variable<float>(PartialShape.Create(batch, decoderHiddenSize));
-            var attention = new Attention2<float>(encoderHiddenStates, decoderHiddenStates, attentionDim);
+            var encoderHiddenStates = Variable<double>(PartialShape.Create(-1, batch, encoderHiddenSize));
+            var decoderHiddenStates = Variable<double>(PartialShape.Create(batch, decoderHiddenSize));
+            var attention = new Attention2<double>(encoderHiddenStates, decoderHiddenStates, attentionDim);
 
             var ctx = Context.GpuContext(0);
             var exe = new Executor(ctx, attention.Output) { AssignAllGradient = true };
@@ -465,10 +536,10 @@ namespace AleaTKTest
 
             // encoderSeqLength is flexibly at runtime
             var encoderSeqLength = 3;
-            var dataEncoderHiddenStates = new float[encoderSeqLength, batch, encoderHiddenSize];
+            var dataEncoderHiddenStates = new double[encoderSeqLength, batch, encoderHiddenSize];
             UniformRandomArray(dataEncoderHiddenStates);
 
-            var dataDecoderHiddenStates = new float[batch, decoderHiddenSize];
+            var dataDecoderHiddenStates = new double[batch, decoderHiddenSize];
             UniformRandomArray(dataDecoderHiddenStates);
 
             exe.AssignTensor(encoderHiddenStates, dataEncoderHiddenStates.AsTensor());
@@ -476,27 +547,49 @@ namespace AleaTKTest
             exe.Forward();
 
             var tensorOutput = exe.GetTensor(attention.Output);
-            Console.WriteLine(tensorOutput.Shape);
-            tensorOutput.Print();
+            //Console.WriteLine(tensorOutput.Shape);
+            //tensorOutput.Print();
 
-            //var dataDOutput = new float[encoderSeqLength, batch];
-            //UniformRandomArray(dataDOutput);
-            //exe.AssignGradientDirectly(attention.Output, dataDOutput.AsTensor());
-            //exe.Backward();
+            var dataDOutput = new double[batch, encoderHiddenSize];
+            UniformRandomArray(dataDOutput);
+            exe.AssignGradientDirectly(attention.Output, dataDOutput.AsTensor());
+            exe.Backward();
 
-            //var tensorDWh = exe.GetGradient(attention.Wh);
+            var tensorDWh = exe.GetGradient(attention.Wh);
             //tensorDWh.Print();
 
-            //var tensorDWd = exe.GetGradient(attention.Wd);
+            var tensorDWd = exe.GetGradient(attention.Wd);
             //tensorDWd.Print();
 
-            //var tensorDH = exe.GetGradient(attention.Vectors);
+            var tensorDH = exe.GetGradient(attention.EncoderHiddenStates);
             //Console.WriteLine(tensorDH.Shape);
             //tensorDH.Reshape(-1, encoderHiddenSize).Print();
 
-            //var tensorDD = exe.GetGradient(attention.DecoderHiddenStates);
+            var tensorDD = exe.GetGradient(attention.DecoderHiddenStates);
             //Console.WriteLine(tensorDD.Shape);
             //tensorDD.Print();
+
+            var bump = 1e-7;
+
+            var tensorDWh_fd = GradientChecker.FiniteDifferenceGradient(exe, attention.Wh, bump: bump);
+            //tensorDWh.Print();
+            //tensorDWh_fd.Print();
+            AreClose(tensorDWh.ToArray2D(), tensorDWh_fd.ToArray2D(), 1e-7);
+
+            var tensorDWd_fd = GradientChecker.FiniteDifferenceGradient(exe, attention.Wd, bump: bump);
+            //tensorDWd.Print();
+            //tensorDWd_fd.Print();
+            AreClose(tensorDWd.ToArray2D(), tensorDWd_fd.ToArray2D(), 1e-7);
+
+            var tensorDH_fd = GradientChecker.FiniteDifferenceGradient(exe, attention.EncoderHiddenStates, bump: bump);
+            //tensorDH.Reshape(-1, encoderHiddenSize).Print();
+            //tensorDH_fd.Reshape(-1, encoderHiddenSize).Print();
+            // TODO: bug here, not match
+
+            var tensorDD_fd = GradientChecker.FiniteDifferenceGradient(exe, attention.DecoderHiddenStates, bump: bump);
+            //tensorDD.Print();
+            //tensorDD_fd.Print();
+            AreClose(tensorDD.ToArray2D(), tensorDD_fd.ToArray2D(), 1e-7);
         }
     }
 }
