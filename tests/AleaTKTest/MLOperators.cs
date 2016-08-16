@@ -240,20 +240,19 @@ namespace AleaTKTest
 
             public Variable<T> Output { get; }
 
-            public Variable<T> Prod { get; }
-
             public override void Forward(Executor executor)
             {
                 var vectors = executor.GetTensor(Vectors);
                 var weights = executor.GetTensor(Weights);
 
-                // the result of prod need to be reshape to matrix for later to do dot
-                var l0 = Math.Max(weights.Shape[0], vectors.Shape[0]);
-                var prod = (weights * vectors).Reshape(l0, -1);
+                var prod = weights*vectors;
 
-                // after dot, it will reshape back to what they should be
-                var shape = Shape.Broadcast(weights.Shape, vectors.Shape).Skip(1).ToArray();
-                var reduce = ReduceSum(prod, 0).Reshape(shape);
+                // currently reduce sum only works up to 2d tensor
+                // then we do a reduce to make it an 2d tensor
+                // after reduce, we reshape it back.
+                var length0 = prod.Shape[0];
+                var shape = prod.Shape.Skip(1).ToArray();
+                var reduce = ReduceSum(prod.Reshape(length0, -1), 0).Reshape(shape);
 
                 executor.AssignTensor(Output, reduce);
             }
