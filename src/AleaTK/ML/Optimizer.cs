@@ -142,7 +142,7 @@ namespace AleaTK.ML
 
     public abstract class Optimizer : Executor
     {
-        protected Optimizer(Context ctx, Variable loss) : base(ctx, loss)
+        protected Optimizer(Context ctx, Variable output) : base(ctx, output)
         {
         }
 
@@ -151,13 +151,13 @@ namespace AleaTK.ML
 
     public class GradientDescentOptimizer : Optimizer
     {
-        public GradientDescentOptimizer(Context ctx, Variable loss, double learningRate) : base(ctx, loss)
+        public GradientDescentOptimizer(Context ctx, Variable output, double learningRate) : base(ctx, output)
         {
             LearningRate = learningRate;
             GradientClipper = new NoGradientClipper();
         }
 
-        public GradientDescentOptimizer(Context ctx, Variable loss, double learningRate, GradientClipper clipper) : base(ctx, loss)
+        public GradientDescentOptimizer(Context ctx, Variable output, double learningRate, GradientClipper clipper) : base(ctx, output)
         {
             LearningRate = learningRate;
             GradientClipper = clipper;
@@ -192,7 +192,7 @@ namespace AleaTK.ML
     {
         private readonly Dictionary<Variable, Tensor> _weights = new Dictionary<Variable, Tensor>();
 
-        public RMSpropOptimizer(Context ctx, Variable loss, double learningRate, double rho, double epsilon) : base(ctx, loss)
+        public RMSpropOptimizer(Context ctx, Variable output, double learningRate, double rho, double epsilon) : base(ctx, output)
         {
             LearningRate = learningRate;
             Rho = rho;
@@ -200,7 +200,7 @@ namespace AleaTK.ML
             GradientClipper = new NoGradientClipper();
         }
 
-        public RMSpropOptimizer(Context ctx, Variable loss, double learningRate, double rho, double epsilon, GradientClipper clipper) : base(ctx, loss)
+        public RMSpropOptimizer(Context ctx, Variable output, double learningRate, double rho, double epsilon, GradientClipper clipper) : base(ctx, output)
         {
             LearningRate = learningRate;
             Rho = rho;

@@ -109,11 +109,14 @@ namespace AleaTK.ML
 
         public Dictionary<Symbol, IDisposable> Dispobales { get; } = new Dictionary<Symbol, IDisposable>();
 
-        public Executor(Context ctx, Variable loss)
+        public Variable Output { get; }
+
+        public Executor(Context ctx, Variable output)
         {
             Context = ctx;
-            AddData(loss);
-            SetForwardOrder(loss);
+            Output = output;
+            AddData(output);
+            SetForwardOrder(output);
             _backwardOrder = ((IEnumerable<Differentiable>) _forwardOrder).Reverse().ToList();
         }
 
@@ -297,6 +300,16 @@ namespace AleaTK.ML
                 var grad = data.GradientAsExpr;
                 return Context.Assign(data.GradientAsValue, grad + expr);
             }
+        }
+
+        public Task AssignGradient<T>(Variable<T> variable, Tensor<T> srcTensor)
+        {
+            if (!AssignAllGradient && !variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
+
+            var data = _data[variable];
+            var blob = data.GetOrAllocateGradient(srcTensor.Layout, srcTensor.Memory.Length);
+            var dstTensor = blob.Cast<T>();
+            return Context.Copy(dstTensor, srcTensor);
         }
 
         public Task AssignGradientDirectly<T>(Variable<T> variable, Tensor<T> srcTensor)
