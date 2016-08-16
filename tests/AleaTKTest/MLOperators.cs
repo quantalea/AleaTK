@@ -20,7 +20,7 @@ namespace AleaTKTest
         private static readonly Context gpu = Context.GpuContext(GpuId, StreamId);
 
         [Test]
-        public static void GradientDot_GPU()
+        public static void Gradient_Dot_GPU()
         {
             var rng = new Random();
             var m = 10;
@@ -71,7 +71,7 @@ namespace AleaTKTest
         }
 
         [Test]
-        public static void GradientAdd1D_SameShape_GPU()
+        public static void Gradient_VectorAddVector_GPU()
         {
             var rng = new Random();
             var x = Variable<double>();
@@ -80,6 +80,53 @@ namespace AleaTKTest
 
             var ctx = gpu;
             var exe = new Executor(ctx, z) {AssignAllGradient = true};
+
+            var l = 10;
+            var hx = new double[l];
+            var hy = new double[l];
+            var hz = new double[l];
+            UniformRandomArray(hx, rng);
+            UniformRandomArray(hy, rng);
+            for (var i = 0; i < l; ++i) hz[i] = hx[i] + hy[i];
+            //hx.AsTensor().Print();
+            //hy.AsTensor().Print();
+
+            exe.AssignTensor(x, hx.AsTensor());
+            exe.AssignTensor(y, hy.AsTensor());
+            exe.Forward();
+            var tz = exe.GetTensor(z);
+            //tz.Print();
+            AreClose(hz, tz.ToArray(), 1e-10);
+
+            var hdz = new double[l];
+            UniformRandomArray(hdz, rng);
+            //hdz.AsTensor().Print();
+            exe.AssignGradient(z, hdz.AsTensor());
+            exe.Backward();
+            var tdx = exe.GetGradient(x);
+            var tdy = exe.GetGradient(y);
+            tdx.Print();
+            tdy.Print();
+
+            var bump = 1e-6;
+            var hdx = GradientChecker.FiniteDifferenceGradient(exe, x, bump: bump);
+            var hdy = GradientChecker.FiniteDifferenceGradient(exe, y, bump: bump);
+            hdx.Print();
+            hdy.Print();
+
+            AreClose(tdx.ToArray(), hdx.ToArray(), 1e-6);
+        }
+
+        [Test]
+        public static void Gradient_ScalarAddVector_GPU()
+        {
+            var rng = new Random();
+            var x = Variable<double>();
+            var y = Variable<double>();
+            var z = x + y;
+
+            var ctx = gpu;
+            var exe = new Executor(ctx, z) { AssignAllGradient = true };
 
             var l = 10;
             var hx = new double[l];
