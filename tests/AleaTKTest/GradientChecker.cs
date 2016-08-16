@@ -69,5 +69,40 @@ namespace AleaTKTest
 
             return inputGradientTensor;
         }
+
+        public static Tensor<double> FiniteDifferenceGradient(Executor executor, Variable<double> input, double bump = 1e-5f, Variable<double> output = null)
+        {
+            if (output == null)
+            {
+                output = (Variable<double>)executor.Output;
+            }
+
+            // first, backup the x
+            var ctx = executor.Context;
+            var inputTensor = executor.GetTensor(input);
+            var inputShape = inputTensor.Shape;
+            var inputTensorBackup = ctx.Device.Allocate<double>(inputShape);
+            ctx.Assign(inputTensorBackup, inputTensor);
+
+            // evaluator
+            Func<double[], double[]> evaluator = inputBlob =>
+            {
+                executor.AssignTensor(input, inputBlob.AsTensor(inputShape));
+                executor.Forward();
+                var outputTensor = executor.GetTensor(output);
+                return outputTensor.ToArray();
+            };
+
+            var inputArray = inputTensor.ToArray();
+            var outputGradientArray = executor.GetGradient(output).ToArray();
+            var inputGradientArray = AleaTKUtil.GradientChecker.FiniteDifferenceGradient(inputArray, outputGradientArray, evaluator, bump);
+            var inputGradientTensor = inputGradientArray.AsTensor(inputShape);
+
+            // now we need recover the data
+            executor.AssignTensor(input, inputTensorBackup);
+            executor.Forward();
+
+            return inputGradientTensor;
+        }
     }
 }
