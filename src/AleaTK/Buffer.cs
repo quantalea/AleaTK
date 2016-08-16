@@ -235,6 +235,11 @@ namespace AleaTK
             var shape = Layout.Shape;
             Util.EnsureTrue(broadcastShape.Rank >= shape.Rank);
 
+            if (shape.Length == 1)
+            {
+                return i => rawReader(0);
+            }
+
             // all inner broadcasting
             var firstNonOneIndex = shape.FirstIndex(l => l != 1L);
             var innerShape = firstNonOneIndex < shape.Rank - 1
