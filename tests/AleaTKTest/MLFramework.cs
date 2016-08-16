@@ -435,10 +435,10 @@ namespace AleaTKTest
             var dWeights = exe.GetGradient(weightedReduce.Weights);
             var dVectors = exe.GetGradient(weightedReduce.Vectors);
 
-            var dWeightsFd = GradientChecker.FiniteDifferenceGradient(exe, weights, weightedReduce.Output);
+            var dWeightsFd = GradientChecker.FiniteDifferenceGradient(exe, weights, output: weightedReduce.Output);
             AreClose(dWeightsFd, dWeights, 1e-2);
 
-            var dVectorsFd = GradientChecker.FiniteDifferenceGradient(exe, vectors, weightedReduce.Output);
+            var dVectorsFd = GradientChecker.FiniteDifferenceGradient(exe, vectors, output: weightedReduce.Output);
             AreClose(dVectorsFd, dVectors, 0.005);
 
             var dVectorsFdArray = dVectorsFd.Reshape(-1).ToArray();

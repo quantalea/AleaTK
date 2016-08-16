@@ -12,13 +12,13 @@ namespace AleaTKUtil
         /// <param name="function"></param>
         /// <param name="jacobi"></param>
         /// <param name="bump"></param>
-        public static void EvaluateJacobi(float[] variable, Func<float[], float[]> function, out float[,] jacobi, float bump = 1e-5f)
+        public static void EvaluateJacobi(double[] variable, Func<double[], double[]> function, out double[,] jacobi, double bump = 1e-5)
         {
             var f0 = function(variable);
 
-            var inputDim = variable.GetLength(0);
-            var outputDim = f0.GetLength(0);
-            jacobi = new float[outputDim, inputDim];
+            var inputDim = variable.Length;
+            var outputDim = f0.Length;
+            jacobi = new double[outputDim, inputDim];
 
             for (var i = 0; i < inputDim; ++i)
             {
@@ -36,12 +36,12 @@ namespace AleaTKUtil
             }
         }
 
-        public static float[] FiniteDifferenceGradient(float[] variable, float[] outputGrad, Func<float[], float[]> function, float bump = 1e-5f)
+        public static double[] FiniteDifferenceGradient(double[] variable, double[] outputGrad, Func<double[], double[]> function, double bump = 1e-5)
         {
-            float[,] jacobi = null;
+            double[,] jacobi = null;
             EvaluateJacobi(variable, function, out jacobi, bump);
 
-            var inputDim = variable.GetLength(0);
+            var inputDim = variable.Length;
             var outputDim = jacobi.GetLength(0);
 
             if (outputDim != outputGrad.GetLength(0)) throw new Exception("Wrong size");
