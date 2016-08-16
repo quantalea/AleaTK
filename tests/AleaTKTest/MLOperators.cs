@@ -208,5 +208,120 @@ namespace AleaTKTest
 
             //AreClose(tdx.ToArray(), hdx.ToArray(), 1e-6);
         }
+
+        public class WeightedSumReduce<T> : Differentiable
+        {
+            public WeightedSumReduce(Variable<T> weights, Variable<T> vectors)
+            {
+                Weights = weights;
+                Vectors = vectors;
+
+                // output shape is the broadcast of w*v, skip the first dimension
+                // currently the reduce is fixed on first dimension
+                //if (weights.HasShape && vectors.HasShape)
+                //{
+                //    var shape = PartialShape.Broadcast(weights.Shape, vectors.Shape);
+                //    Output = Variable<T>(PartialShape.Create(shape.Skip(1).ToArray()));
+                //}
+                //else
+                //{
+                //    Output = Variable<T>();
+                //}
+                Output = Variable<T>();
+
+                AddInput(Weights);
+                AddInput(Vectors);
+                AddOutput(Output);
+            }
+
+            public Variable<T> Weights { get; }
+
+            public Variable<T> Vectors { get; }
+
+            public Variable<T> Output { get; }
+
+            public Variable<T> Prod { get; }
+
+            public override void Forward(Executor executor)
+            {
+                var vectors = executor.GetTensor(Vectors);
+                var weights = executor.GetTensor(Weights);
+
+                // the result of prod need to be reshape to matrix for later to do dot
+                var l0 = Math.Max(weights.Shape[0], vectors.Shape[0]);
+                var prod = (weights * vectors).Reshape(l0, -1);
+
+                // after dot, it will reshape back to what they should be
+                var shape = Shape.Broadcast(weights.Shape, vectors.Shape).Skip(1).ToArray();
+                var reduce = ReduceSum(prod, 0).Reshape(shape);
+
+                executor.AssignTensor(Output, reduce);
+            }
+
+            public override void Backward(Executor executor)
+            {
+                var vectors = executor.GetTensor(Vectors);
+                var weights = executor.GetTensor(Weights);
+                var dOutput = executor.GetGradient(Output);
+
+                executor.AssignGradient(Vectors, weights*dOutput);
+                executor.AssignGradient(Weights, vectors*dOutput);
+            }
+        }
+
+        [Test]
+        public static void Gradient_WeightedSumReduce_01_GPU()
+        {
+            var rng = new Random(42);
+            var x = Variable<double>();
+            var w = Variable<double>();
+            var wsr = new WeightedSumReduce<double>(w, x);
+            var y = wsr.Output;
+
+            var ctx = gpu;
+            var exe = new Executor(ctx, y) {AssignAllGradient = true};
+
+            var n = 5;
+            var d = 3;
+            var hx = new double[n, d];
+            var hw = new double[n, d];
+            UniformRandomArray(hx, rng);
+            UniformRandomArray(hw, rng);
+            var hy = new double[d];
+            for (var i = 0; i < d; ++i)
+            {
+                var acc = 0.0;
+                for (var j = 0; j < n; ++j)
+                {
+                    acc += hw[j, i]*hx[j, i];
+                }
+                hy[i] = acc;
+            }
+
+            exe.AssignTensor(x, hx.AsTensor());
+            exe.AssignTensor(w, hw.AsTensor());
+            exe.Forward();
+            var ty = exe.GetTensor(y);
+            ty.Print();
+            AreClose(hy, ty.ToArray(), 1e-10);
+
+            var hdy = new double[d];
+            UniformRandomArray(hdy, rng);
+            exe.AssignGradientDirectly(y, hdy.AsTensor());
+            exe.Backward();
+            var tdx = exe.GetGradient(x);
+            var tdw = exe.GetGradient(w);
+            tdx.Print();
+            tdw.Print();
+
+            var bump = 1e-8;
+            var hdx = GradientChecker.FiniteDifferenceGradient(exe, x, bump: bump);
+            var hdw = GradientChecker.FiniteDifferenceGradient(exe, w, bump: bump);
+            hdx.Print();
+            hdw.Print();
+
+            AreClose(hdx.ToArray2D(), tdx.ToArray2D(), 1e-7);
+            AreClose(hdw.ToArray2D(), tdw.ToArray2D(), 1e-7);
+        }
     }
 }

@@ -302,15 +302,27 @@ namespace AleaTK.ML
             }
         }
 
-        public Task AssignGradient<T>(Variable<T> variable, Tensor<T> srcTensor)
-        {
-            if (!AssignAllGradient && !variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
+        //public Task AssignGradient<T>(Variable<T> variable, Tensor<T> srcTensor)
+        //{
+        //    if (!AssignAllGradient && !variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
 
-            var data = _data[variable];
-            var blob = data.GetOrAllocateGradient(srcTensor.Layout, srcTensor.Memory.Length);
-            var dstTensor = blob.Cast<T>();
-            return Context.Copy(dstTensor, srcTensor);
-        }
+        //    var data = _data[variable];
+        //    var counter = data.GradientAggregationCounter;
+        //    if (counter == 0)
+        //    {
+        //        var shape = data.Tensor.Layout.Shape;
+        //        var layout = new Layout(shape);
+        //        var length = layout.Shape.Length;
+        //        var blob = data.GetOrAllocateGradient(layout, length);
+        //        var dstTensor = blob.Cast<T>();
+        //        return Context.Copy(dstTensor, srcTensor);
+        //    }
+        //    else
+        //    {
+        //        var grad = data.GradientAsExpr;
+        //        return Context.Assign(data.GradientAsValue, grad + srcTensor);
+        //    }
+        //}
 
         public Task AssignGradientDirectly<T>(Variable<T> variable, Tensor<T> srcTensor)
         {
