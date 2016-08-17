@@ -228,7 +228,7 @@ namespace AleaTK.ML.Operator
                 ReserveSpace.Buffer.Ptr,
                 (IntPtr)ReserveSpace.Shape.Length);
 
-            if (executor.GetData(W).GradientAggregationCounter == 0)
+            if (executor.GetData(W).CheckGradientAggregationCounter == 0)
             {
                 executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
             }

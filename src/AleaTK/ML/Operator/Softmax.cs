@@ -263,6 +263,7 @@ namespace AleaTK.ML.Operator
             var y = executor.GetTensor(Output);
             var dx = executor.GetGradient(Input, x.Shape);
             var dy = executor.GetGradient(Output);
+            var dxCounter = executor.GetData(Input).CheckGradientAggregationCounter;
 
             if (ctx.Type == ContextType.Gpu && x.Layout.IsInnerChangeMostFullyPacked)
             {
@@ -280,7 +281,7 @@ namespace AleaTK.ML.Operator
                     var yPtr = y.Buffer.Ptr;
                     var dyPtr = dy.Buffer.Ptr;
                     var alpha = ScalarOps.Conv<T>(1.0);
-                    var beta = ScalarOps.Conv<T>(0.0);
+                    var beta = dxCounter == 0 ? ScalarOps.Conv<T>(0.0) : ScalarOps.Conv<T>(1.0);
                     const SoftmaxAlgorithm algorithm = SoftmaxAlgorithm.ACCURATE;
                     const SoftmaxMode mode = SoftmaxMode.INSTANCE;
 

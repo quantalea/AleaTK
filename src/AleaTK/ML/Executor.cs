@@ -10,7 +10,6 @@ namespace AleaTK.ML
     {
         private Tensor _tensor = null;
         private Tensor _gradient = null;
-        private int _gradientAggregationCounter = 0;
 
         public Data(Context context, Variable variable)
         {
@@ -22,17 +21,19 @@ namespace AleaTK.ML
 
         public Variable Variable { get; }
 
+        public int GradientAggregationCounter { get; set; } = 0;
+
         public void ResetGradientAggregationCounter()
         {
-            _gradientAggregationCounter = 0;
+            GradientAggregationCounter = 0;
         }
 
-        public int GradientAggregationCounter
+        public int CheckGradientAggregationCounter
         {
             get
             {
-                _gradientAggregationCounter++;
-                return _gradientAggregationCounter - 1;
+                GradientAggregationCounter++;
+                return GradientAggregationCounter - 1;
             }
         }
 
@@ -285,7 +286,7 @@ namespace AleaTK.ML
             if (!AssignAllGradient && !variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
 
             var data = _data[variable];
-            var counter = data.GradientAggregationCounter;
+            var counter = data.CheckGradientAggregationCounter;
             if (counter == 0)
             {
                 var shape = data.Tensor.Layout.Shape;
@@ -307,7 +308,7 @@ namespace AleaTK.ML
         //    if (!AssignAllGradient && !variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
 
         //    var data = _data[variable];
-        //    var counter = data.GradientAggregationCounter;
+        //    var counter = data.CheckGradientAggregationCounter;
         //    if (counter == 0)
         //    {
         //        var shape = data.Tensor.Layout.Shape;

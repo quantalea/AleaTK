@@ -48,11 +48,29 @@ namespace AleaTK.ML.Operator
 
             if (executor.GetData(Output).Gradient.Layout.IsInnerChangeMostFullyPacked)
             {
-                var gradient = executor.GetData(Output).Gradient;
-                var shape = gradient.Layout.Shape.Reshape(executor.GetData(Input).Tensor.Layout.Shape.AsArray);
-                var layout = new Layout(shape);
-                var newGradient = new Tensor(gradient.Device, gradient.Memory, layout, gradient.Ptr);
-                executor.GetData(Input).SetGradient(newGradient);
+                var inputData = executor.GetData(Input);
+                var outputData = executor.GetData(Output);
+                var inputCounter = inputData.GradientAggregationCounter;
+                var outputCounter = outputData.GradientAggregationCounter;
+                var outputGradient = outputData.Gradient;
+                var inputShape = inputData.Tensor.Layout.Shape;
+
+                if (inputCounter == 0)
+                {
+                    var inputLayout = new Layout(inputShape);
+                    var inputGradient = new Tensor(outputGradient.Device, outputGradient.Memory, inputLayout, outputGradient.Ptr);
+                    inputData.SetGradient(inputGradient);
+                    inputData.GradientAggregationCounter = outputCounter;
+                }
+                else
+                {
+                    var inputGradient = inputData.Gradient.Cast<T>();
+                    var layout = new Layout(inputShape);
+                    var gradient = (new Tensor(outputGradient.Device, outputGradient.Memory, layout, outputGradient.Ptr)).Cast<T>();
+                    var ctx = executor.Context;
+                    ctx.Assign(inputGradient, inputGradient + gradient);
+                    inputData.GradientAggregationCounter = inputCounter + outputCounter;
+                }
             }
             else
             {

@@ -315,17 +315,17 @@ namespace AleaTK.ML.Operator
             var context = executor.Context.ToGpuContext();
             var dnn = context.Dnn;
 
-            if (executor.GetData(X).GradientAggregationCounter != 0)
+            if (executor.GetData(X).CheckGradientAggregationCounter != 0)
             {
                 throw new InvalidOperationException();
             }
 
-            if (executor.GetData(HX).GradientAggregationCounter != 0)
+            if (executor.GetData(HX).CheckGradientAggregationCounter != 0)
             {
                 throw new InvalidOperationException();
             }
 
-            if (executor.GetData(CX).GradientAggregationCounter != 0)
+            if (executor.GetData(CX).CheckGradientAggregationCounter != 0)
             {
                 throw new InvalidOperationException();
             }
@@ -358,7 +358,7 @@ namespace AleaTK.ML.Operator
                 executor.GetTensor(ReserveSpace).Buffer.Ptr,
                 (IntPtr) executor.GetTensor(ReserveSpace).Shape.Length);
 
-            if (executor.GetData(W).GradientAggregationCounter == 0)
+            if (executor.GetData(W).CheckGradientAggregationCounter == 0)
             {
                 executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
             }
