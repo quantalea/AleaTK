@@ -395,7 +395,7 @@ namespace AleaTKTest
         }
 
         [Test]
-        public static void TestWeightedReductionEvaluator()
+        public static void TestAttentionReduce()
         {
             var n = 3;
             var b = 4;
@@ -451,7 +451,7 @@ namespace AleaTKTest
             public long AttentionDim { get; }
             public long EncoderHiddenSize { get; }
             public long DecoderHiddenSize { get; }
-            public long Batch { get; }
+            public long BatchSize { get; }
 
             public Variable<T> Output { get; }
 
@@ -496,22 +496,22 @@ namespace AleaTKTest
                 // reshape for the boadcast: (n,b*K) + (b*K) (for broadcasting, (b*K) will broadcast to (1,b*K)
                 // then: (n,b*K) + (b*K) = (n,b*K)
                 // reshape result to (n*b,K)
-                Batch = EncoderHiddenStates.Shape[1];
-                Util.EnsureTrue(Batch > 0, "Batch need to be determined.");
-                Util.EnsureTrue(Batch == DecoderHiddenStates.Shape[0]);
-                var add = (whh.Reshape(-1, Batch * AttentionDim) + wdd.Reshape(-1)).Reshape(-1, AttentionDim);
+                BatchSize = EncoderHiddenStates.Shape[1];
+                Util.EnsureTrue(BatchSize > 0, "Batch need to be determined.");
+                Util.EnsureTrue(BatchSize == DecoderHiddenStates.Shape[0]);
+                var sum = (whh.Reshape(-1, BatchSize * AttentionDim) + wdd.Reshape(-1)).Reshape(-1, AttentionDim);
 
                 // tanh, shape no change (n*b,K)
-                var whd = new ActivationTanh<T>(add);
+                var whd = new ActivationTanh<T>(sum);
 
                 // (n*b,K) dot (K,1) = (n*b,1) => reshape to (n,b)
-                var u = Dot(whd.Output, V).Reshape(-1, Batch);
+                var u = Dot(whd.Output, V).Reshape(-1, BatchSize);
 
                 // same shape (n,b)
                 var softmax = new Softmax<T>(u);
 
                 // sum (n,b) * (n,b,d)
-                var reduce = new AttentionReduce<T>(softmax.Output.Reshape(-1, Batch), EncoderHiddenStates);
+                var reduce = new AttentionReduce<T>(softmax.Output.Reshape(-1, BatchSize), EncoderHiddenStates);
 
                 Output = reduce.Output;
             }
