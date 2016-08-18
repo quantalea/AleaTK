@@ -3,9 +3,9 @@ using static AleaTK.ML.Library;
 
 namespace AleaTK.ML.Operator
 {
-    public class ActivationReLU<T> : Differentiable
+    public abstract class Activation<T> : Differentiable
     {
-        public ActivationReLU(Variable<T> input)
+        protected Activation(Variable<T> input)
         {
             Input = input;
             Output = Variable<T>(input.Shape);
@@ -20,70 +20,48 @@ namespace AleaTK.ML.Operator
         public override void Forward(Executor executor)
         {
             var input = executor.GetTensor(Input);
-            executor.AssignTensor(Output, Max(input, 0.0.AsScalar<T>()));
+            executor.AssignTensor(Output, ForwardExpr(input));
         }
+
+        protected abstract Expr<T> ForwardExpr(Tensor<T> input);
 
         public override void Backward(Executor executor)
         {
             var output = executor.GetTensor(Output);
             var dOutput = executor.GetGradient(Output);
-            executor.AssignGradient(Input, ReLUGrad(output) * dOutput);
+            executor.AssignGradient(Input, BackwardExpr(output)*dOutput);
         }
+
+        protected abstract Expr<T> BackwardExpr(Tensor<T> output);
     }
 
-    public class ActivationSigmoid<T> : Differentiable
+    public class ActivationReLU<T> : Activation<T>
     {
-        public ActivationSigmoid(Variable<T> input)
-        {
-            Input = input;
-            Output = Variable<T>(input.Shape);
-            AddInput(Input);
-            AddOutput(Output);
-        }
+        public ActivationReLU(Variable<T> input) : base(input) { }
 
-        public Variable<T> Input { get; }
+        protected override Expr<T> ForwardExpr(Tensor<T> input) { return Max(input, 0.0.AsScalar<T>()); }
 
-        public Variable<T> Output { get; }
-
-        public override void Forward(Executor executor)
-        {
-            var input = executor.GetTensor(Input);
-            executor.AssignTensor(Output, 1.0.AsScalar<T>() / (1.0.AsScalar<T>() + Exp(-input)));
-        }
-
-        public override void Backward(Executor executor)
-        {
-            var output = executor.GetTensor(Output);
-            var dOutput = executor.GetGradient(Output);
-            executor.AssignGradient(Input, output * (1.0.AsScalar<T>() - output) * dOutput);
-        }
+        protected override Expr<T> BackwardExpr(Tensor<T> output) { return ReLUGrad(output); }
     }
 
-    public class ActivationTanh<T> : Differentiable
+    public class ActivationSigmoid<T> : Activation<T>
     {
-        public ActivationTanh(Variable<T> input)
+        public ActivationSigmoid(Variable<T> input) : base(input) { }
+
+        protected override Expr<T> ForwardExpr(Tensor<T> input)
         {
-            Input = input;
-            Output = Variable<T>(input.Shape);
-            AddInput(Input);
-            AddOutput(Output);
+            return 1.0.AsScalar<T>()/(1.0.AsScalar<T>() + Exp(-input));
         }
 
-        public Variable<T> Input { get; }
+        protected override Expr<T> BackwardExpr(Tensor<T> output) { return output*(1.0.AsScalar<T>() - output); }
+    }
 
-        public Variable<T> Output { get; }
+    public class ActivationTanh<T> : Activation<T>
+    {
+        public ActivationTanh(Variable<T> input) : base(input) { }
 
-        public override void Forward(Executor executor)
-        {
-            var input = executor.GetTensor(Input);
-            executor.AssignTensor(Output, Tanh(input));
-        }
+        protected override Expr<T> ForwardExpr(Tensor<T> input) { return Tanh(input); }
 
-        public override void Backward(Executor executor)
-        {
-            var output = executor.GetTensor(Output);
-            var dOutput = executor.GetGradient(Output);
-            executor.AssignGradient(Input, (1.0.AsScalar<T>() - output * output) * dOutput);
-        }
+        protected override Expr<T> BackwardExpr(Tensor<T> output) { return 1.0.AsScalar<T>() - output*output; }
     }
 }
