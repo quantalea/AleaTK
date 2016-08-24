@@ -263,7 +263,7 @@ namespace AleaTK.ML.Operator
             var y = executor.GetTensor(Output);
             var dx = executor.GetGradient(Input, x.Shape);
             var dy = executor.GetGradient(Output);
-            var dxCounter = executor.GetData(Input).CheckGradientAggregationCounter;
+            var dxCounter = executor.IncreaseGradientAggregationCounter(Input);
 
             if (ctx.Type == ContextType.Gpu && x.Layout.IsInnerChangeMostFullyPacked)
             {

@@ -228,9 +228,9 @@ namespace AleaTK.ML.Operator
                 ReserveSpace.Buffer.Ptr,
                 (IntPtr)ReserveSpace.Shape.Length);
 
-            if (executor.GetData(W).CheckGradientAggregationCounter == 0)
+            if (executor.IncreaseGradientAggregationCounter(W) == 0)
             {
-                executor.AssignGradientDirectly(W, ScalarOps.Conv<T>(0.0).AsScalar());
+                executor.AssignGradient(W, ScalarOps.Conv<T>(0.0).AsScalar(), replace: true);
             }
 
             dnn.RNNBackwardWeights(

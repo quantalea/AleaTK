@@ -93,8 +93,8 @@ namespace AleaTK.ML.Operator
 
         public void AssignTerminalGradient(Executor executor, Tensor<T> dhy, Tensor<T> dcy)
         {
-            executor.AssignGradientDirectly(HY, dhy);
-            executor.AssignGradientDirectly(CY, dcy);
+            executor.AssignGradient(HY, dhy, replace: true);
+            executor.AssignGradient(CY, dcy, replace: true);
         }
 
         public void ZeroInitialStates(Executor executor)
@@ -105,8 +105,8 @@ namespace AleaTK.ML.Operator
 
         public void ZeroTerminalGradient(Executor executor)
         {
-            executor.AssignGradientDirectly(HY, Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
-            executor.AssignGradientDirectly(CY, Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignGradient(HY, Fill(Shape.Create(HY.Shape.AsArray), ScalarOps.Conv<T>(0.0)), replace: true);
+            executor.AssignGradient(CY, Fill(Shape.Create(CY.Shape.AsArray), ScalarOps.Conv<T>(0.0)), replace: true);
         }
 
         public override void Forward(Executor executor)

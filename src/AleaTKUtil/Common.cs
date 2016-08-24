@@ -351,6 +351,20 @@ namespace AleaTKUtil
             return array;
         }
 
+        //public static void InitArray<T>(T[,,] array, Func<int, int, int, T> init)
+        //{
+        //    for (var i = 0; i < array.GetLength(0); ++i)
+        //    {
+        //        for (var j = 0; j < array.GetLength(1); ++j)
+        //        {
+        //            for (var k = 0; k < array.GetLength(2); ++k)
+        //            {
+        //                array[i, j, k] = init(i, j, k);
+        //            }
+        //        }
+        //    }
+        //}
+
         public static void InitArray<T>(T[,] array, Func<int, int, T> init)
         {
             for (var i = 0; i < array.GetLength(0); ++i)
@@ -367,6 +381,12 @@ namespace AleaTKUtil
             var gen = rng ?? Rng;
             InitArray(array, (i, j) => gen.NextDouble());
         }
+
+        //public static void UniformRandomArray(double[,,] array, Random rng = null)
+        //{
+        //    var gen = rng ?? Rng;
+        //    InitArray(array, (i, j, k) => gen.NextDouble());
+        //}
 
         public static void UniformRandomArray(float[,] array, Random rng = null)
         {

@@ -33,7 +33,7 @@ namespace AleaTKTest
             var ctx = gpu;
             var exe = new Executor(ctx, z) { AssignAllGradient = true };
 
-            var l = 10;
+            //var l = 10;
             var hx = new double[m, k];
             var hy = new double[k, n];
             UniformRandomArray(hx, rng);
@@ -53,7 +53,7 @@ namespace AleaTKTest
             var hdz = new double[m, n];
             UniformRandomArray(hdz, rng);
             //hdz.AsTensor().Print();
-            exe.AssignGradient(z, hdz.AsTensor());
+            exe.AssignGradient(z, hdz.AsTensor(), replace: true);
             exe.Backward();
             var tdx = exe.GetGradient(x);
             var tdy = exe.GetGradient(y);
@@ -101,7 +101,7 @@ namespace AleaTKTest
             var hdz = new double[l];
             UniformRandomArray(hdz, rng);
             //hdz.AsTensor().Print();
-            exe.AssignGradient(z, hdz.AsTensor());
+            exe.AssignGradient(z, hdz.AsTensor(), replace: true);
             exe.Backward();
             var tdx = exe.GetGradient(x);
             var tdy = exe.GetGradient(y);
@@ -272,7 +272,7 @@ namespace AleaTKTest
             }
         }
 
-        [Test]
+        [Test, Ignore]
         public static void Gradient_WeightedSumReduce_01_GPU()
         {
             var rng = new Random(42);
@@ -310,7 +310,7 @@ namespace AleaTKTest
 
             var hdy = new double[d];
             UniformRandomArray(hdy, rng);
-            exe.AssignGradientDirectly(y, hdy.AsTensor());
+            exe.AssignGradient(y, hdy.AsTensor(), replace: true);
             exe.Backward();
             var tdx = exe.GetGradient(x);
             var tdw = exe.GetGradient(w);
@@ -327,7 +327,7 @@ namespace AleaTKTest
             AreClose(hdw.ToArray2D(), tdw.ToArray2D(), 1e-7);
         }
         
-        [Test]
+        [Test, Ignore]
         public static void Gradient_WeightedSumReduce_02_GPU()
         {
             var rng = new Random(42);
@@ -365,7 +365,7 @@ namespace AleaTKTest
 
             var hdy = new double[d];
             UniformRandomArray(hdy, rng);
-            exe.AssignGradientDirectly(y, hdy.AsTensor());
+            exe.AssignGradient(y, hdy.AsTensor(), replace: true);
             exe.Backward();
             //var tdx = exe.GetGradient(x);
             //var tdw = exe.GetGradient(w);

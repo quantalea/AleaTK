@@ -35,7 +35,7 @@ namespace AleaTKTest
             }
             else
             {
-                executor.AssignGradientDirectly(var, gradient);
+                executor.AssignGradient(var, gradient, replace: true);
             }
         }
 
@@ -127,7 +127,7 @@ namespace AleaTKTest
             exe.AssignTensor(varX, x.AsTensor());
             exe.AssignTensor(varW, w.AsTensor());
             exe.AssignTensor(varB, b.AsTensor());
-            exe.AssignGradientDirectly(varY, dy.AsTensor());
+            exe.AssignGradient(varY, dy.AsTensor(), replace: true);
             var bump = 1e-7;
 
             var dx_fd = GradientChecker.FiniteDifferenceGradient(exe, varX, bump: bump);

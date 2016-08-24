@@ -46,6 +46,11 @@ namespace Tutorial.Samples
                 Directory.CreateDirectory("Data");
             }
 
+            if (!Directory.Exists(@"Data\Wmt15"))
+            {
+                Directory.CreateDirectory(@"Data\Wmt15");
+            }
+
             if (!File.Exists(doneFileName))
             {
                 using (var client = new WebClient())

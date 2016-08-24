@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using Alea;
 using AleaTK;
 using AleaTK.ML;
 using AleaTK.ML.Operator;
@@ -8,6 +9,7 @@ using static AleaTK.Library;
 using static AleaTK.ML.Library;
 using static AleaTKUtil.Common;
 using static AleaTKTest.Common;
+using Context = AleaTK.Context;
 using Executor = AleaTK.ML.Executor;
 
 namespace AleaTKTest
@@ -117,7 +119,7 @@ namespace AleaTKTest
             exe.AssignTensor(softmax, softmaxData.AsTensor());
             exe.AssignTensor(states, statesData.AsTensor());
             exe.Forward();
-            exe.AssignGradientDirectly(reduce.Output, dOutputData.AsTensor());
+            exe.AssignGradient(reduce.Output, dOutputData.AsTensor(), replace: true);
             exe.Backward();
 
             var dSoftmax = exe.GetGradient(reduce.Softmax);
@@ -253,7 +255,7 @@ namespace AleaTKTest
 
             var dataDOutput = new double[batch, encoderHiddenSize];
             UniformRandomArray(dataDOutput);
-            exe.AssignGradientDirectly(attention.Output, dataDOutput.AsTensor());
+            exe.AssignGradient(attention.Output, dataDOutput.AsTensor(), replace: true);
             exe.Backward();
 
             var tensorDWh = exe.GetGradient(attention.Wh);
@@ -291,6 +293,297 @@ namespace AleaTKTest
             //tensorDD.Print();
             //tensorDD_fd.Print();
             AreClose(tensorDD.ToArray2D(), tensorDD_fd.ToArray2D(), 1e-7);
+        }
+
+        public static Variable<double> CreateUnrollingGraph(Variable<double> input, Variable<double>[] states, Variable<double> weight)
+        {
+            var steps = states.Length;
+            Variable<double> output = input;
+
+            for (var i = 0; i < steps; ++i)
+            {
+                var state_i = states[i];
+                var input_i = output;
+                // NOTE here the weight is shared.
+                var output_i = Dot(input_i, weight) + state_i;
+                output = output_i;
+            }
+
+            return output;
+        }
+
+        [Test]
+        public static void UnrollingStyle()
+        {
+            // create unrolling graph
+            const int steps = 4;
+            var inputVar = Variable<double>();
+            var stateVars = Enumerable.Range(0, steps).Select(_ => Variable<double>()).ToArray();
+            var weightVar = Variable<double>();
+            var outputVar = CreateUnrollingGraph(inputVar, stateVars, weightVar);
+
+            // create executor
+            var ctx = Context.GpuContext(0);
+            var exe = new Executor(ctx, outputVar) { AssignAllGradient = true };
+            exe.Initalize();
+
+            // fake forward data
+            const int n = 5;
+            var input = new double[n, n];
+            var states = Enumerable.Range(0, steps).Select(_ => new double[n, n]).ToArray();
+            var weight = new double[n, n];
+
+            var rng = new Random(42);
+            UniformRandomArray(input, rng);
+            foreach (var state in states)
+            {
+                UniformRandomArray(state, rng);
+            }
+            UniformRandomArray(weight, rng);
+
+            exe.AssignTensor(inputVar, input.AsTensor());
+            for (var i = 0; i < steps; ++i)
+            {
+                exe.AssignTensor(stateVars[i], states[i].AsTensor());
+            }
+            exe.AssignTensor(weightVar, weight.AsTensor());
+
+            // run forward
+            exe.Forward();
+            var outputTensor = exe.GetTensor(outputVar);
+            outputTensor.Print();
+
+            // fake backward data
+            var dOutput = new double[n, n];
+            UniformRandomArray(dOutput, rng);
+            exe.AssignGradient(outputVar, dOutput.AsTensor(), replace: true);
+
+            // run backward
+            exe.Backward();
+
+            // verify gradients
+            var bump = 1e-7;
+
+            var dInputTensor = exe.GetGradient(inputVar);
+            var dInputTensor_FD = GradientChecker.FiniteDifferenceGradient(exe, inputVar, bump: bump);
+            //dInputTensor.Print();
+            //dInputTensor_FD.Print();
+            AreClose(dInputTensor_FD.ToArray2D(), dInputTensor.ToArray2D(), 1e-7);
+
+            for (var i = 0; i < steps; ++i)
+            {
+                var stateVar = stateVars[i];
+                var dStateTensor = exe.GetGradient(stateVar);
+                var dStateTensor_FD = GradientChecker.FiniteDifferenceGradient(exe, stateVar, bump: bump);
+                //dStateTensor.Print();
+                //dStateTensor_FD.Print();
+                AreClose(dStateTensor_FD.ToArray2D(), dStateTensor.ToArray2D(), 1e-7);
+            }
+
+            var dWeightTensor = exe.GetGradient(weightVar);
+            var dWeightTensor_FD = GradientChecker.FiniteDifferenceGradient(exe, weightVar, bump: bump);
+            //dWeightTensor.Print();
+            //dWeightTensor_FD.Print();
+            AreClose(dWeightTensor_FD.ToArray2D(), dWeightTensor.ToArray2D(), 1e-3);
+        }
+
+        public class LoopDemo : Differentiable
+        {
+            public LoopDemo(Variable<double> input, Variable<double> states, Variable<double> weight)
+            {
+                Input = input;
+                States = states;
+                Output = Variable<double>();
+                Weight = weight;
+                Intermediate = Variable<double>();
+                AddInput(Input);
+                AddInput(States);
+                AddInput(Weight);
+                AddOutput(Output);
+                AddOutput(Intermediate);
+
+                // the following graph is used for sub executor
+                // it is also good idea to make another class for that
+                // in lstm case, it is the attention graph.
+                SubInput = Variable<double>();
+                SubWeight = Variable<double>();
+                SubState = Variable<double>();
+                SubOutput = Dot(SubInput, SubWeight) + SubState;
+            }
+
+            public Variable<double> SubInput { get; }
+
+            public Variable<double> SubWeight { get; }
+
+            public Variable<double> SubState { get; }
+
+            public Variable<double> SubOutput { get; }
+
+            public Variable<double> States { get; }
+
+            public Variable<double> Input { get; }
+
+            public Variable<double> Weight { get; }
+
+            public Variable<double> Output { get; }
+
+            public Variable<double> Intermediate { get; }
+
+            public readonly AleaTK.ML.Symbol SubExecutor = new AleaTK.ML.Symbol();
+
+            public override void Initialize(Executor executor)
+            {
+                var subExecutor = new Executor(executor.Context, SubOutput) { AssignAllGradient = true };
+                executor.Objects[SubExecutor] = subExecutor;
+                base.Initialize(executor);
+            }
+
+            public override void Forward(Executor executor)
+            {
+                var input = executor.GetTensor(Input);
+                var states = executor.GetTensor(States);
+                var weight = executor.GetTensor(Weight);
+                Util.EnsureTrue(input.Shape.Rank == 2);
+                Util.EnsureTrue(states.Shape.Rank == 3, "states shape: (steps, n, n)");
+                Util.EnsureTrue(states.Shape[1] == states.Shape[2], "states shape: (steps, n, n)");
+                var steps = states.Shape[0];
+                var n = states.Shape[1];
+                var intermediate = executor.GetTensor(Intermediate, Shape.Create(steps - 1, n, n));
+                var output = executor.GetTensor(Output, Shape.Create(n, n));
+
+                var subExecutor = (Executor) executor.Objects[SubExecutor];
+                for (var i = 0; i < steps; ++i)
+                {
+                    var input_i = i == 0 ? input : intermediate.Slice(i - 1).Reshape(n, n);
+                    var state_i = states.Slice(i).Reshape(n, n);
+                    var output_i = i == steps - 1 ? output : intermediate.Slice(i).Reshape(n, n);
+
+                    subExecutor.SetTensor(SubInput, input_i);
+                    subExecutor.SetTensor(SubWeight, weight);
+                    subExecutor.SetTensor(SubState, state_i);
+                    subExecutor.SetTensor(SubOutput, output_i);
+                    subExecutor.Forward();
+                }
+            }
+
+            public override void Backward(Executor executor)
+            {
+                var input = executor.GetTensor(Input);
+                var states = executor.GetTensor(States);
+                var weight = executor.GetTensor(Weight);
+                Util.EnsureTrue(input.Shape.Rank == 2);
+                Util.EnsureTrue(states.Shape.Rank == 3, "states shape: (steps, n, n)");
+                Util.EnsureTrue(states.Shape[1] == states.Shape[2], "states shape: (steps, n, n)");
+                var steps = (int)states.Shape[0];
+                var n = states.Shape[1];
+                var intermediate = executor.GetTensor(Intermediate);
+                var output = executor.GetTensor(Output);
+
+                var dOutput = executor.GetGradient(Output);
+                var dIntermediate = executor.GetGradient(Intermediate, intermediate.Shape);
+                var dStates = executor.GetGradient(States, states.Shape);
+                var dWeight = executor.GetGradient(Weight, weight.Shape);
+                var dInput = executor.GetGradient(Input, input.Shape);
+
+                var subExecutor = (Executor)executor.Objects[SubExecutor];
+                for (var i = steps - 1; i >= 0; --i)
+                {
+                    // need set both input and output tensor and their gradient
+
+                    var input_i = i == 0 ? input : intermediate.Slice(i - 1).Reshape(n, n);
+                    var state_i = states.Slice(i).Reshape(n, n);
+                    var output_i = i == steps - 1 ? output : intermediate.Slice(i).Reshape(n, n);
+
+                    subExecutor.SetTensor(SubInput, input_i);
+                    subExecutor.SetTensor(SubWeight, weight);
+                    subExecutor.SetTensor(SubState, state_i);
+                    subExecutor.SetTensor(SubOutput, output_i);
+
+                    var dInput_i = i == 0 ? dInput : dIntermediate.Slice(i - 1).Reshape(n, n);
+                    var dState_i = dStates.Slice(i).Reshape(n, n);
+                    var dOutput_i = i == steps - 1 ? dOutput : dIntermediate.Slice(i).Reshape(n, n);
+
+                    // since we have one shared variable, the weight, so we need update the
+                    // gradient aggregation counter ourselves
+                    // set counter = 0 means, you just point the memory for that gradient to another
+                    // tensor, but it contains no value for aggregation
+                    // but since weight is shared, so we need update its counter correctly, it 
+                    // will be assigned by steps - 1 times.
+                    subExecutor.ClearGradientAggregationCounters();
+                    subExecutor.SetGradient(SubInput, dInput_i, counter: 0);
+                    subExecutor.SetGradient(SubWeight, dWeight, counter: steps - 1 - i);
+                    subExecutor.SetGradient(SubState, dState_i, counter: 0);
+                    subExecutor.SetGradient(SubOutput, dOutput_i);
+
+                    // do backward without clearing the counter, because we set the counter ourselves.
+                    subExecutor.Backward(clearGradientAggretionCounter: false);
+                }
+            }
+        }
+
+        [Test]
+        public static void LoopStyle()
+        {
+            var inputVar = Variable<double>();
+            var statesVar = Variable<double>();
+            var weightVar = Variable<double>();
+            var loop = new LoopDemo(inputVar, statesVar, weightVar);
+            var outputVar = loop.Output;
+
+            // create executor
+            var ctx = Context.GpuContext(0);
+            var exe = new Executor(ctx, outputVar) { AssignAllGradient = true };
+            exe.Initalize();
+
+            // fake forward data
+            const int steps = 4;
+            const int n = 5;
+            var input = new double[n, n];
+            var states = new double[steps, n, n];
+            var weight = new double[n, n];
+
+            var rng = new Random(42);
+            UniformRandomArray(input, rng);
+            UniformRandomArray(states, rng);
+            UniformRandomArray(weight, rng);
+
+            exe.AssignTensor(inputVar, input.AsTensor());
+            exe.AssignTensor(statesVar, states.AsTensor());
+            exe.AssignTensor(weightVar, weight.AsTensor());
+
+            // run forward
+            exe.Forward();
+            var outputTensor = exe.GetTensor(outputVar);
+            outputTensor.Print();
+
+            // fake backward data
+            var dOutput = new double[n, n];
+            UniformRandomArray(dOutput, rng);
+            exe.AssignGradient(outputVar, dOutput.AsTensor(), replace: true);
+
+            // run backward
+            exe.Backward();
+
+            // verify gradients
+            var bump = 1e-7;
+
+            var dInputTensor = exe.GetGradient(inputVar);
+            var dInputTensor_FD = GradientChecker.FiniteDifferenceGradient(exe, inputVar, bump: bump);
+            //dInputTensor.Print();
+            //dInputTensor_FD.Print();
+            AreClose(dInputTensor_FD.ToArray2D(), dInputTensor.ToArray2D(), 1e-7);
+
+            var dStatesTensor = exe.GetGradient(statesVar);
+            var dStatesTensor_FD = GradientChecker.FiniteDifferenceGradient(exe, statesVar, bump: bump);
+            //dStatesTensor.Reshape(steps, -1).Print();
+            //dStatesTensor_FD.Reshape(steps, -1).Print();
+            AreClose(dStatesTensor_FD.ToArray3D(), dStatesTensor.ToArray3D(), 1e-7);
+
+            var dWeightTensor = exe.GetGradient(weightVar);
+            var dWeightTensor_FD = GradientChecker.FiniteDifferenceGradient(exe, weightVar, bump: bump);
+            //dWeightTensor.Print();
+            //dWeightTensor_FD.Print();
+            AreClose(dWeightTensor_FD.ToArray2D(), dWeightTensor.ToArray2D(), 1e-3);
         }
     }
 }

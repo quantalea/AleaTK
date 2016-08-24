@@ -116,7 +116,7 @@ namespace AleaTKTest
                 cy1 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
                 hy1 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
 
-                exe.AssignGradientDirectly(lstm.Y, dy.AsTensor());
+                exe.AssignGradient(lstm.Y, dy.AsTensor(), replace: true);
 
                 exe.Backward();
 
@@ -149,7 +149,7 @@ namespace AleaTKTest
                 cy2 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
                 hy2 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
 
-                exe.AssignGradientDirectly(lstm.Y, dy.AsTensor());
+                exe.AssignGradient(lstm.Y, dy.AsTensor(), replace: true);
 
                 exe.Backward();
 
@@ -213,7 +213,7 @@ namespace AleaTKTest
                 cy1 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
                 hy1 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
 
-                exe.AssignGradientDirectly(lstm.Y, dOutput.AsTensor());
+                exe.AssignGradient(lstm.Y, dOutput.AsTensor(), replace: true);
 
                 exe.Backward();
 
@@ -247,7 +247,7 @@ namespace AleaTKTest
                 hy2 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
 
                 // set dy
-                exe.AssignGradientDirectly(lstm.Output, dOutput.AsTensor());
+                exe.AssignGradient(lstm.Output, dOutput.AsTensor(), replace: true);
 
                 // set dcy and dhy
                 lstm.ZeroTerminalGradient(exe);

@@ -89,7 +89,8 @@ namespace Tutorial.Samples
         {
             var ctx = executor.Context;
             var data = executor.GetData(var);
-            Util.EnsureTrue(data.CheckGradientAggregationCounter == 0);
+            Util.EnsureTrue(data.GradientAggregationCounter == 0);
+            data.GradientAggregationCounter++;
             var shape = executor.GetTensor(var).Shape;
             var gradient = executor.GetGradient(var, shape);
             if (zerolize) ctx.Assign(gradient, Fill(shape, ScalarOps.Conv<T>(0.0)));
@@ -100,7 +101,8 @@ namespace Tutorial.Samples
         {
             var ctx = executor.Context;
             var data = executor.GetData(var);
-            Util.EnsureTrue(data.CheckGradientAggregationCounter == 0);
+            Util.EnsureTrue(data.GradientAggregationCounter == 0);
+            data.GradientAggregationCounter++;
             var gradient = executor.GetGradient(var, shape);
             if (zero) ctx.Assign(gradient, Fill(shape, ScalarOps.Conv<T>(0.0)));
             return gradient;

@@ -96,7 +96,7 @@ namespace Tutorial.Samples
             AreClose(HN, myHN, 1e-6);
 
             var dH = mfr.GetDoubleArray("dH").Select(n => (float)n).ToArray();
-            exe.AssignGradientDirectly(lstm.Y, dH.AsTensor(Shape.Create(seqLength, batchSize, hiddenSize)));
+            exe.AssignGradient(lstm.Y, dH.AsTensor(Shape.Create(seqLength, batchSize, hiddenSize)), replace: true);
 
             exe.Backward();
 
@@ -231,7 +231,7 @@ namespace Tutorial.Samples
                 cy1 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
                 hy1 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
 
-                exe.AssignGradientDirectly(lstm.Y, dy.AsTensor());
+                exe.AssignGradient(lstm.Y, dy.AsTensor(), replace: true);
 
                 exe.Backward();
 
@@ -332,7 +332,7 @@ namespace Tutorial.Samples
                 cy2 = exe.GetTensor(lstm.CY).ToArray2D();
                 hy2 = exe.GetTensor(lstm.HY).ToArray2D();
 
-                exe.AssignGradientDirectly(lstm.Y, dy.AsTensor());
+                exe.AssignGradient(lstm.Y, dy.AsTensor(), replace: true);
 
                 exe.Backward();
 

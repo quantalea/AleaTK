@@ -38,7 +38,7 @@ namespace AleaTKTest
 
             // set some data
             var inputData = new double[N, D];
-            var matA = new double[N, P];
+            var matA = new double[D, P];
             var matB = new double[N, P];
             NormalRandomArray(inputData);
             NormalRandomArray(matA);
