@@ -485,6 +485,11 @@ namespace AleaTKTest
                 var dWeight = executor.GetGradient(Weight, weight.Shape);
                 var dInput = executor.GetGradient(Input, input.Shape);
 
+                var counterInput = executor.GetGradientAggregationCounter(Input);
+                var counterWeight = executor.GetGradientAggregationCounter(Weight);
+                var counterStates = executor.GetGradientAggregationCounter(States);
+                var counterIntermediate = executor.GetGradientAggregationCounter(Intermediate);
+
                 var subExecutor = (Executor)executor.Objects[SubExecutor];
                 for (var i = steps - 1; i >= 0; --i)
                 {
@@ -510,14 +515,19 @@ namespace AleaTKTest
                     // but since weight is shared, so we need update its counter correctly, it 
                     // will be assigned by steps - 1 times.
                     subExecutor.ClearGradientAggregationCounters();
-                    subExecutor.SetGradient(SubInput, dInput_i, counter: 0);
-                    subExecutor.SetGradient(SubWeight, dWeight, counter: steps - 1 - i);
-                    subExecutor.SetGradient(SubState, dState_i, counter: 0);
+                    subExecutor.SetGradient(SubInput, dInput_i, counter: i == 0 ? counterInput : counterIntermediate);
+                    subExecutor.SetGradient(SubWeight, dWeight, counter: counterWeight + steps - 1 - i);
+                    subExecutor.SetGradient(SubState, dState_i, counter: counterStates);
                     subExecutor.SetGradient(SubOutput, dOutput_i);
 
                     // do backward without clearing the counter, because we set the counter ourselves.
                     subExecutor.Backward(clearGradientAggretionCounter: false);
                 }
+
+                executor.IncreaseGradientAggregationCounter(Input);
+                executor.IncreaseGradientAggregationCounter(Weight);
+                executor.IncreaseGradientAggregationCounter(States);
+                executor.IncreaseGradientAggregationCounter(Intermediate);
             }
         }
 
