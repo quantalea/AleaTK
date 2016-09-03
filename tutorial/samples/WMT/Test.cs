@@ -21,7 +21,7 @@ namespace Tutorial.Samples
             Data.EnsureDataFile();
         }
 
-        [Test]
+        [Test, Ignore("Please run this explicitly.")]
         public static void PreprocessDefault()
         {
             Preprocess();
@@ -99,7 +99,7 @@ namespace Tutorial.Samples
             BackTranslate(Data.Name("english_train.txt"), Data.Name("french_train.txt"), vocabulary1, vocabulary2, 28, 10, true); // Canada
         }
 
-        [Test]
+        [Test, Ignore("Please run this explicitly.")]
         public static void TestCreateVocabulary()
         {
             Data.EnsureDataFile();
@@ -109,7 +109,7 @@ namespace Tutorial.Samples
             english.Item1.Save(vocabularyFile);
         }
 
-        [Test]
+        [Test, Ignore("Please run this explicitly.")]
         public static void TestDisplayTraining()
         {
             var en = Data.Name(Path.Combine("training-giga-fren", "giga-fren.release2.en"));

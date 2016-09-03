@@ -212,7 +212,7 @@ namespace Tutorial.Samples
             var vocabulary = CreateVocabulary(trainingDataFilename, maxVocabularySize, normalizeDigits);
             vocabulary.Item1.Save(vocabularyFilename);
             TextToTokenIds(trainingDataFilename, trainingTokenizedFilename, vocabulary.Item1);
-            TextToTokenIds(testDataFilename, trainingTokenizedFilename, vocabulary.Item1, normalizeDigits);
+            TextToTokenIds(testDataFilename, testTokenizedFilename, vocabulary.Item1, normalizeDigits);
         }
 
         /// <summary>
