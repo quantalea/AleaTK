@@ -71,8 +71,8 @@ namespace Tutorial.Samples
                 Decompress(Name("dev-v2.tgz"), Name("dev-v2.tar"));
                 Extract(Name("dev-v2.tar"), Name("dev-v2"));
                 Extract(Name("training-giga-fren.tar"), Name("training-giga-fren"));
-                Decompress(Name(Path.Combine("training-giga-fren", "giga-fren.release2.en.gz")), Name(Path.Combine("training-giga-fren", "giga-fren.release2.en")));
-                Decompress(Name(Path.Combine("training-giga-fren", "giga-fren.release2.fr.gz")), Name(Path.Combine("training-giga-fren", "giga-fren.release2.fr")));
+                Decompress(Name(Path.Combine("training-giga-fren", "giga-fren.release2.fixed.en.gz")), Name(Path.Combine("training-giga-fren", "giga-fren.release2.en")));
+                Decompress(Name(Path.Combine("training-giga-fren", "giga-fren.release2.fixed.fr.gz")), Name(Path.Combine("training-giga-fren", "giga-fren.release2.fr")));
 
                 using (var doneFile = File.CreateText(doneFileName))
                 {

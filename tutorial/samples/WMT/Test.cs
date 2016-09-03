@@ -22,6 +22,11 @@ namespace Tutorial.Samples
         }
 
         [Test]
+        public static void PreprocessDefault()
+        {
+            Preprocess();
+        }
+
         public static void Preprocess(int maxVocabularySize = 100000, bool normalizeDigits = true)
         {
             var englishTraining = Data.Name(Path.Combine("training-giga-fren", "giga-fren.release2.en"));
