@@ -374,9 +374,19 @@ namespace Tutorial.Samples
                 }
             }
 
-            var testImages = ctx.Allocate(mnist.TestImages);
-            var testLabels = ctx.Allocate(mnist.TestLabels);
-            PrintResult(opt, model.Loss.Pred, model.Images, model.Labels, testImages, testLabels, mnist.TestLabels);
+            // cleanup memory
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+
+            var memMb = ctx.ToGpuContext().Gpu.Device.TotalMemory / 1024.0 / 1024.0;
+            var enoughMem = memMb >= 4096.0;
+
+            if (enoughMem)
+            {
+                var testImages = ctx.Allocate(mnist.TestImages);
+                var testLabels = ctx.Allocate(mnist.TestLabels);
+                PrintResult(opt, model.Loss.Pred, model.Images, model.Labels, testImages, testLabels, mnist.TestLabels);
+            }
 
             // cleanup memory
             GC.Collect();
@@ -434,9 +444,19 @@ namespace Tutorial.Samples
                 }
             }
 
-            var testImages = ctx.Allocate(mnist.TestImages);
-            var testLabels = ctx.Allocate(mnist.TestLabels);
-            PrintResult(opt, model.Loss.Pred, model.Images, model.Labels, testImages, testLabels, mnist.TestLabels);
+            // cleanup memory
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+
+            var memMb = ctx.ToGpuContext().Gpu.Device.TotalMemory / 1024.0 / 1024.0;
+            var enoughMem = memMb >= 4096.0;
+
+            if (enoughMem)
+            {
+                var testImages = ctx.Allocate(mnist.TestImages);
+                var testLabels = ctx.Allocate(mnist.TestLabels);
+                PrintResult(opt, model.Loss.Pred, model.Images, model.Labels, testImages, testLabels, mnist.TestLabels);
+            }
 
             // cleanup memory
             GC.Collect();
@@ -504,9 +524,15 @@ namespace Tutorial.Samples
             GC.Collect();
             GC.WaitForPendingFinalizers();
 
-            var testImages = ctx.Allocate(mnist.TestImages);
-            var testLabels = ctx.Allocate(mnist.TestLabels);
-            PrintResult(opt, model.Loss.Pred, model.Images, model.Labels, testImages, testLabels, mnist.TestLabels);
+            var memMb = ctx.ToGpuContext().Gpu.Device.TotalMemory / 1024.0 / 1024.0;
+            var enoughMem = memMb >= 4096.0;
+
+            if (enoughMem)
+            {
+                var testImages = ctx.Allocate(mnist.TestImages);
+                var testLabels = ctx.Allocate(mnist.TestLabels);
+                PrintResult(opt, model.Loss.Pred, model.Images, model.Labels, testImages, testLabels, mnist.TestLabels);
+            }
 
             // cleanup memory
             GC.Collect();
@@ -518,6 +544,13 @@ namespace Tutorial.Samples
         {
             var model = MultinomialRegressionModel();
             var ctx = Context.GpuContext(0);
+
+            var memMb = ctx.ToGpuContext().Gpu.Device.TotalMemory / 1024.0 / 1024.0;
+            if (memMb < 4096.0)
+            {
+                Assert.Inconclusive("Need more Gpu memory.");
+            }
+
             var opt = new GradientDescentOptimizer(ctx, model.Loss.Loss, 0.00005);
             opt.Initalize();
 
@@ -564,6 +597,13 @@ namespace Tutorial.Samples
         {
             var model = MultiLayerPerceptronModel();
             var ctx = Context.GpuContext(0);
+
+            var memMb = ctx.ToGpuContext().Gpu.Device.TotalMemory / 1024.0 / 1024.0;
+            if (memMb < 4096.0)
+            {
+                Assert.Inconclusive("Need more Gpu memory.");
+            }
+
             var opt = new GradientDescentOptimizer(ctx, model.Loss.Loss, 0.00008);
 
             // now we need to initalize the parameters for the optimizer
@@ -613,6 +653,13 @@ namespace Tutorial.Samples
         {
             var model = ConvolutionalNeuralNetworkModel();
             var ctx = Context.GpuContext(0);
+
+            var memMb = ctx.ToGpuContext().Gpu.Device.TotalMemory / 1024.0 / 1024.0;
+            if (memMb < 4096.0)
+            {
+                Assert.Inconclusive("Need more Gpu memory.");
+            }
+
             var opt = new GradientDescentOptimizer(ctx, model.Loss.Loss, 0.000008);
             opt.Initalize();
 

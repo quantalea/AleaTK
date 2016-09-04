@@ -101,6 +101,31 @@ namespace AleaTK
 
             return dstShape;
         }
+
+        public static PartialShape Broadcast(params PartialShape[] shapes)
+        {
+            // get the highest rank
+            var rank = shapes.Select(shape => shape.Rank).Max();
+
+            // extend shapes to that rank
+            var extenededShapes =
+                shapes.Select(shape => new PartialShape(Enumerable.Repeat(1L, rank - shape.Rank).Concat(shape).ToArray()))
+                      .ToArray();
+
+            // get the target length, also check if it breaks the rule
+            var lengths = Enumerable.Range(0, rank).Select(dimension =>
+            {
+                var length = extenededShapes.Select(shape => shape[dimension]).Max();
+                if (extenededShapes.Any(shape => shape[dimension] != -1 && shape[dimension] != 1L && shape[dimension] != length))
+                {
+                    var shapesStr = string.Join(",", shapes.Select(x => x.ToString()));
+                    throw new InvalidOperationException($"Wrong shape operation, cannot broadcast. {shapesStr}");
+                }
+                return length;
+            }).ToArray();
+
+            return new PartialShape(lengths);
+        }
     }
 
     public sealed class Shape : DimensionProperties<long>
@@ -401,7 +426,7 @@ namespace AleaTK
             }
         }
 
-        public void Print<T>(Func<long, T> read)
+        public void Print<T>(Func<long, T> read, bool all = false)
         {
             Console.WriteLine("=====================================");
             Console.WriteLine($"Rank({Rank}) Shape({Shape}) Strides({Strides})");
@@ -422,7 +447,7 @@ namespace AleaTK
             if (Rank == 1)
             {
                 const long itemsPerRow = 5;
-                const long maxItems = 100;
+                var maxItems = all ? long.MaxValue : 100;
                 var length = Shape[0];
                 var stride = Strides[0];
                 for (var i = 0L; i < length && i < maxItems; ++i)
@@ -459,8 +484,8 @@ namespace AleaTK
 
             if (Rank == 2)
             {
-                const long maxCols = 10;
-                const long maxRows = 10;
+                var maxCols = all ? long.MaxValue : 10;
+                var maxRows = all ? long.MaxValue : 10;
                 var rows = Shape[0];
                 var cols = Shape[1];
                 var rowStride = Strides[0];

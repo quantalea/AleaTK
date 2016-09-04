@@ -235,15 +235,26 @@ namespace AleaTK
             var shape = Layout.Shape;
             Util.EnsureTrue(broadcastShape.Rank >= shape.Rank);
 
-            // all inner broadcasting
-            if (broadcastShape.Skip(broadcastShape.Rank - shape.Rank).Zip(shape, (l1, l2) => l1 == l2).All(pred => pred))
+            if (shape.Length == 1)
             {
-                var length = shape.Length;
+                return i => rawReader(0);
+            }
+
+            // all inner broadcasting
+            var firstNonOneIndex = shape.FirstIndex(l => l != 1L);
+            var innerShape = firstNonOneIndex < shape.Rank - 1
+                ? Shape.Create(shape.Skip(firstNonOneIndex + 1).ToArray())
+                : shape;
+            if (broadcastShape.Skip(broadcastShape.Rank - innerShape.Rank).Zip(shape, (l1, l2) => l1 == l2).All(pred => pred))
+            {
+                var length = innerShape.Length;
                 // ReSharper disable once PossibleNullReferenceException
                 if (stride == 1L) return i => rawReader(i % length);
                 // ReSharper disable once PossibleNullReferenceException
                 return i => rawReader((i % length) * stride);
             }
+
+            var strides = Layout.Strides;
 
             // non-all-inner broadcasting
             if (broadcastShape.Rank == 2)
@@ -255,7 +266,26 @@ namespace AleaTK
                 return i => rawReader((i/dstCols)*stride);
             }
 
-            throw new NotImplementedException();
+            if (broadcastShape.Rank == 3)
+            {
+                // extend shapes to that rank
+                var extenededShape = new Shape(Enumerable.Repeat(1L, broadcastShape.Rank - shape.Rank).Concat(shape).ToArray());
+                var length1 = broadcastShape[1];
+                var length2 = broadcastShape[2];
+                var stride0 = extenededShape[0] == broadcastShape[0] ? extenededShape[1]*extenededShape[2]*stride : 0;
+                var stride1 = extenededShape[1] == broadcastShape[1] ? extenededShape[2] * stride : 0;
+                var stride2 = extenededShape[2] == broadcastShape[2] ? stride : 0;
+                return i =>
+                {
+                    var i0 = i/(length1*length2);
+                    var i1 = i%(length1*length2)/length2;
+                    var i2 = i%(length1*length2)%length2;
+                    var idx = i0*stride0 + i1*stride1 + i2*stride2;
+                    return rawReader(idx);
+                };
+            }
+
+            throw new NotImplementedException($"{shape} => {broadcastShape}");
         }
 
         public Func<long, long, T> GetReader2(Shape broadcastShape = null)

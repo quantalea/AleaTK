@@ -113,7 +113,7 @@ namespace AleaTK
         {
             if (Type != targetType)
             {
-                throw new InvalidOperationException("Context type doesn't match.");
+                throw new InvalidOperationException("AttentionState type doesn't match.");
             }
         }
 

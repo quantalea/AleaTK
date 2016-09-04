@@ -2,59 +2,109 @@
 using System.Linq;
 using Alea;
 using Alea.cuDNN;
+using Alea.Parallel;
 using static AleaTK.Library;
 using static AleaTK.ML.Library;
 
 namespace AleaTK.ML.Operator
 {
-    public abstract class RnnType
+    public class RnnDescr<T>
     {
-        public abstract RNNMode Mode { get; }
-
-        public abstract int NumLinLayers { get; }
-
-        public abstract void InitBias<T>(Context ctx, int layerId, int linLayerId, Tensor<T> tensor);
-    }
-
-    public sealed class LstmRnnType : RnnType
-    {
-        public LstmRnnType(double forgetBiasInit = 0.0)
+        public RnnDescr(Executor executor, RnnDynamic<T> rnn)
         {
-            ForgetBiasInit = forgetBiasInit;
+            var context = executor.Context.ToGpuContext();
+            var dnn = context.Dnn;
+
+            Rnn = rnn;
+            var x = executor.GetTensor(Rnn.X);
+
+            SeqLength = (int)x.Shape[0];
+            MiniBatch = (int)x.Shape[1];
+
+            var shape = Shape.Create(SeqLength, MiniBatch, Rnn.HiddenSize);
+            executor.GetTensor(Rnn.Y, shape);
+
+            // state variables
+            shape = Shape.Create(Rnn.NumLayers, MiniBatch, Rnn.HiddenSize);
+            var strides = Strides.Create(shape[1] * shape[2], shape[2], 1); // inner change most
+            executor.GetTensor(Rnn.HX, shape);
+            executor.GetTensor(Rnn.CX, shape);
+            executor.GetTensor(Rnn.HY, shape);
+            executor.GetTensor(Rnn.CY, shape);
+            StateDesc = new TensorDescriptor();
+            StateDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
+
+            // xDesc is an array, for each step
+            shape = Shape.Create(MiniBatch, rnn.InputSize, 1);
+            strides = Strides.Create(shape[1] * shape[2], shape[2], 1);
+            var xDesc = new TensorDescriptor();
+            xDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
+            XDesc = Enumerable.Repeat(xDesc, SeqLength).ToArray();
+
+            // yDesc is an array, for each step
+            shape = Shape.Create(MiniBatch, rnn.HiddenSize, 1);
+            strides = Strides.Create(shape[1] * shape[2], shape[2], 1);
+            var yDesc = new TensorDescriptor();
+            yDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
+            YDesc = Enumerable.Repeat(yDesc, SeqLength).ToArray();
+
+            // workspace and reserved space
+            var rnnDesc = executor.RnnDescDict[rnn.RnnDesc];
+            IntPtr workSize;
+            dnn.GetRNNWorkspaceSize(rnnDesc, SeqLength, XDesc, out workSize);
+            executor.GetTensor(Rnn.Workspace, Shape.Create(workSize.ToInt64()));
+
+            if (Rnn.IsTraining)
+            {
+                IntPtr reserveSize;
+                dnn.GetRNNTrainingReserveSize(rnnDesc, SeqLength, XDesc, out reserveSize);
+                executor.GetTensor(Rnn.ReserveSpace, Shape.Create(reserveSize.ToInt64()));
+
+                executor.GetGradient(Rnn.X, x.Shape);
+                executor.GetGradient(Rnn.Y, Shape.Create(SeqLength, MiniBatch, Rnn.HiddenSize));
+                executor.GetGradient(Rnn.HX, Shape.Create(Rnn.NumLayers, MiniBatch, Rnn.HiddenSize));
+                executor.GetGradient(Rnn.CX, Shape.Create(Rnn.NumLayers, MiniBatch, Rnn.HiddenSize));
+            }
         }
 
-        public double ForgetBiasInit { get; }
+        public RnnDynamic<T> Rnn { get; }
 
-        public override RNNMode Mode { get; } = RNNMode.LSTM;
+        public int SeqLength { get; }
 
-        public override int NumLinLayers { get; } = 8;
+        public int MiniBatch { get; }
 
-        public override void InitBias<T>(Context ctx, int layerId, int linLayerId, Tensor<T> tensor)
+        public TensorDescriptor StateDesc { get; }
+
+        public TensorDescriptor[] XDesc { get; }
+
+        public TensorDescriptor[] YDesc { get; }
+
+        public void AssignInitialStates(Executor executor, Tensor<T> hx, Tensor<T> cx)
         {
-            // cuDNN LSTM layout is: IFAO, bias has 2x4, we ignore the second set of bias
-            // so only the first forget bias needs to be set, which is linLayerId = 1
-            if (linLayerId == 1)
-            {
-                ctx.Assign(tensor, ScalarOps.Conv<T>(ForgetBiasInit));
-            }
-            else
-            {
-                ctx.Assign(tensor, ScalarOps.Conv<T>(0.0));
-            }
+            executor.AssignTensor(Rnn.HX, hx);
+            executor.AssignTensor(Rnn.CX, cx);
+        }
+
+        public void ZeroInitialStates(Executor executor)
+        {
+            executor.AssignTensor(Rnn.HX, Fill(Shape.Create(Rnn.HX.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
+            executor.AssignTensor(Rnn.CX, Fill(Shape.Create(Rnn.CX.Shape.AsArray), ScalarOps.Conv<T>(0.0)));
         }
     }
 
     /// <summary>
-    /// Fully unrolled recurrent neural network, possibly multiple layers stacked on each other, accelerated with cuDNN.
+    /// Dynamically allocated recurrent neural network, possibly multiple layers stacked on each other, accelerated with cuDNN.
+    /// This version can be with bucketed data of variable sequence and minibatch size.
+    /// 
     /// Note that cuDNN adds dropout only between the layers, hence dropout for the input and output has to be added seperately.
     /// 
     /// Todo: implement other Rnn types such as GRU, RNN_RELU, RNN_TANH
     /// </summary>
-    public class Rnn<T> : Differentiable
+    public class RnnDynamic<T> : Differentiable
     {
-        public Rnn(RnnType ty, Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, ulong dropoutSeed = 1337UL)
+        public RnnDynamic(RnnType rnnRnnType, Variable<T> x, int numLayers, int hiddenSize, bool isTraining = true, double dropout = 0.0, ulong dropoutSeed = 1337UL)
         {
-            Type = ty;
+            RnnType = rnnRnnType;
             IsTraining = isTraining;
             NumLayers = numLayers;
             HiddenSize = hiddenSize;
@@ -64,42 +114,21 @@ namespace AleaTK.ML.Operator
             // X shape (seqLength, batch, inputSize)
             X = x;
             Util.EnsureEqual(3, X.Shape.Rank, "Input layout: (seqLength, batch, inputSize)");
-            Util.EnsureTrue(X.Shape[0] >= 0, "Input layout: (seqLength, batch, inputSize)");
-            Util.EnsureTrue(X.Shape[1] >= 0, "Input layout: (seqLength, batch, inputSize)");
             Util.EnsureTrue(X.Shape[2] >= 0, "Input layout: (seqLength, batch, inputSize)");
-            SeqLength = (int) X.Shape[0];
-            MiniBatch = (int) X.Shape[1];
-            InputSize = (int) X.Shape[2];
+            InputSize = (int)X.Shape[2];
 
-            // Y Shape (seqLength, batch, hiddenSize)
-            Y = Variable<T>(PartialShape.Create(SeqLength, MiniBatch, HiddenSize));
+            // Y Shape (maxSeqLength, not yet known, hiddenSize)
+            Y = Variable<T>(PartialShape.Create(-1, -1, HiddenSize));
 
             // W shape will be determined during initialization
             W = Parameter<T>();
 
             // state variables
-            var shape = PartialShape.Create(NumLayers, MiniBatch, HiddenSize);
-            var strides = Strides.Create(shape[1]*shape[2], shape[2], 1); // inner change most
+            var shape = PartialShape.Create(NumLayers, -1, HiddenSize);
             HX = Variable<T>(shape);
             CX = Variable<T>(shape);
             HY = Variable<T>(shape);
             CY = Variable<T>(shape);
-            StateDesc = new TensorDescriptor();
-            StateDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
-
-            // xDesc is an array, for each step
-            shape = PartialShape.Create(MiniBatch, InputSize, 1);
-            strides = Strides.Create(shape[1]*shape[2], shape[2], 1);
-            var xDesc = new TensorDescriptor();
-            xDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
-            XDesc = Enumerable.Repeat(xDesc, SeqLength).ToArray();
-
-            // yDesc is an array, for each step
-            shape = PartialShape.Create(MiniBatch, HiddenSize, 1);
-            strides = Strides.Create(shape[1]*shape[2], shape[2], 1);
-            var yDesc = new TensorDescriptor();
-            yDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
-            YDesc = Enumerable.Repeat(yDesc, SeqLength).ToArray();
 
             // construct the graph
             AddInput(X);
@@ -114,7 +143,7 @@ namespace AleaTK.ML.Operator
             AddAuxVar(ReserveSpace);
         }
 
-        public RnnType Type { get; }
+        public RnnType RnnType { get; }
 
         public bool IsTraining { get; }
 
@@ -122,19 +151,9 @@ namespace AleaTK.ML.Operator
 
         public ulong DropoutSeed { get; }
 
-        public TensorDescriptor StateDesc { get; }
-
-        public TensorDescriptor[] XDesc { get; }
-
-        public TensorDescriptor[] YDesc { get; }
-
         public int NumLayers { get; }
 
         public int HiddenSize { get; }
-
-        public int SeqLength { get; }
-
-        public int MiniBatch { get; }
 
         public int InputSize { get; }
 
@@ -164,6 +183,8 @@ namespace AleaTK.ML.Operator
 
         public readonly Symbol RnnDesc = new Symbol();
 
+        public readonly Symbol Descr = new Symbol();
+
         public override void Initialize(Executor executor)
         {
             var context = executor.Context.ToGpuContext();
@@ -178,49 +199,27 @@ namespace AleaTK.ML.Operator
 
             // rnn descriptor
             var rnnDesc = executor.RnnDescDict[RnnDesc];
-            var mode = Type.Mode;
+            var mode = RnnType.Mode;
             rnnDesc.Set(HiddenSize, NumLayers, dropoutDesc, RNNInputMode.LINEAR_INPUT, DirectionMode.UNIDIRECTIONAL, mode, Dnn.DataTypeOf<T>());
 
-            // weight
+            // initialize weight, once only, using minibatch size 1
+            var shape = PartialShape.Create(1, InputSize, 1); // first dimension does not affect the weight shape and size TODO test all, tested only for LSTM
+            var strides = Strides.Create(shape[1] * shape[2], shape[2], 1);
+            var xDesc = new TensorDescriptor();
+            xDesc.SetND(Dnn.DataTypeOf<T>(), shape.AsInt32Array, strides.AsInt32Array);
             var wDesc = executor.FilterDescDict[WDesc];
             IntPtr weightsSize;
-            dnn.GetRNNParamsSize(rnnDesc, XDesc[0], out weightsSize, Dnn.DataTypeOf<T>());
-            Util.EnsureTrue(weightsSize.ToInt64()%Gpu.SizeOf<T>() == 0);
+            dnn.GetRNNParamsSize(rnnDesc, xDesc, out weightsSize, Dnn.DataTypeOf<T>());
+            Util.EnsureTrue(weightsSize.ToInt64() % Gpu.SizeOf<T>() == 0);
             var shapeW = Shape.Create(weightsSize.ToInt64() / Alea.Gpu.SizeOf<T>());
-            wDesc.SetND(Dnn.DataTypeOf<T>(), TensorFormat.CUDNN_TENSOR_NCHW, new [] { (int)shapeW[0], 1, 1 });
-
-            // workspace and reserved space
-            IntPtr workSize;
-            dnn.GetRNNWorkspaceSize(rnnDesc, SeqLength, XDesc, out workSize);
-            executor.GetTensor(Workspace, Shape.Create(workSize.ToInt64()));
-
-            if (IsTraining)
-            {
-                IntPtr reserveSize;
-                dnn.GetRNNTrainingReserveSize(rnnDesc, SeqLength, XDesc, out reserveSize);
-                executor.GetTensor(ReserveSpace, Shape.Create(reserveSize.ToInt64()));
-            }
+            wDesc.SetND(Dnn.DataTypeOf<T>(), TensorFormat.CUDNN_TENSOR_NCHW, new [] {(int)shapeW[0], 1, 1});
 
             // since we are using cuDNN, we'd better make sure these varaibles are allocated
             executor.GetTensor(W, shapeW);
             if (IsTraining) executor.GetGradient(W, shapeW);
-            
-            executor.GetTensor(Y, Shape.Create(Y.Shape.AsArray));
-            executor.GetTensor(HX, Shape.Create(HX.Shape.AsArray));
-            executor.GetTensor(CX, Shape.Create(CX.Shape.AsArray));
-            executor.GetTensor(HY, Shape.Create(HY.Shape.AsArray));
-            executor.GetTensor(CY, Shape.Create(CY.Shape.AsArray));
-
-            if (IsTraining)
-            {
-                executor.GetGradient(X, Shape.Create(X.Shape.AsArray));
-                executor.GetGradient(Y, Shape.Create(Y.Shape.AsArray));
-                executor.GetGradient(HX, Shape.Create(HX.Shape.AsArray));
-                executor.GetGradient(CX, Shape.Create(CX.Shape.AsArray));
-            }
 
             // init weights
-            var numLinearLayers = Type.NumLinLayers;
+            var numLinearLayers = RnnType.NumLinLayers;
 
             using (var filterDesc = new FilterDescriptor())
             {
@@ -236,55 +235,76 @@ namespace AleaTK.ML.Operator
                         TensorFormat format;
 
                         deviceptr<T> linLayerMat;
-                        dnn.GetRNNLinLayerMatrixParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId,
-                            filterDesc, out linLayerMat);
+                        dnn.GetRNNLinLayerMatrixParams(rnnDesc, layer, xDesc, wDesc, w.Buffer.Ptr, linLayerId, filterDesc, out linLayerMat);
 
                         filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
                         var length = filterDimA.Aggregate(ScalarOps.Mul);
 
                         var linLayerMatBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)), linLayerMat);
                         var linLayerMatTensor = new Tensor<T>(linLayerMatBuffer);
-                        context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length))/(Math.Sqrt(HiddenSize+InputSize).AsScalar<T>()));
+                        context.Assign(linLayerMatTensor, RandomNormal<T>(Shape.Create(length)) / (Math.Sqrt(HiddenSize + InputSize).AsScalar<T>()));
 
                         deviceptr<T> linLayerBias;
-                        dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, XDesc[0], wDesc, w.Buffer.Ptr, linLayerId, filterDesc, out linLayerBias);
+                        dnn.GetRNNLinLayerBiasParams(rnnDesc, layer, xDesc, wDesc, w.Buffer.Ptr, linLayerId, filterDesc, out linLayerBias);
 
                         filterDesc.GetND(out dataType, out format, out nbDims, filterDimA);
                         length = filterDimA.Aggregate(ScalarOps.Mul);
 
                         var linLayerBiasBuffer = new Buffer<T>(context.Device, w.Memory, new Layout(Shape.Create(length)), linLayerBias);
                         var linLayerBiasTensor = new Tensor<T>(linLayerBiasBuffer);
-                        Type.InitBias(context, layer, linLayerId, linLayerBiasTensor);
+                        RnnType.InitBias(context, layer, linLayerId, linLayerBiasTensor);
                     }
                 }
             }
 
             base.Initialize(executor);
+        }
 
-            const double value = 0.0;
-            executor.AssignTensor(HX, Fill(Shape.Create(HX.Shape.AsArray), ScalarOps.Conv<T>(value)));
-            executor.AssignTensor(CX, Fill(Shape.Create(CX.Shape.AsArray), ScalarOps.Conv<T>(value)));
+        /// <summary>
+        /// Call ZeroInitialStates at least once before Forward or Backward. 
+        /// </summary>
+        /// <param name="executor"></param>
+        /// <param name="hx"></param>
+        /// <param name="cx"></param>
+        public void AssignInitialStates(Executor executor, Tensor<T> hx, Tensor<T> cx)
+        {
+            var descr = (RnnDescr<T>) executor.Objects[Descr];
+            descr.AssignInitialStates(executor, hx, cx);
+        }
+
+        /// <summary>
+        /// Call ZeroInitialStates at least once before Forward or Backward. 
+        /// </summary>
+        /// <param name="executor"></param>
+        public void ZeroInitialStates(Executor executor)
+        {
+            var descr = (RnnDescr<T>)executor.Objects[Descr];
+            descr.ZeroInitialStates(executor);
         }
 
         public override void Forward(Executor executor)
         {
+            var descr = new RnnDescr<T>(executor, this);
+            executor.Objects[Descr] = descr;
+
             var context = executor.Context.ToGpuContext();
             var dnn = context.Dnn;
             var rnnDesc = executor.RnnDescDict[RnnDesc];
-            var seqLength = SeqLength;
-            var xDesc = XDesc;
+            var seqLength = descr.SeqLength;
+            var xDesc = descr.XDesc;
             var x = executor.GetTensor(X);
-            var hxDesc = StateDesc;
+
+            var hxDesc = descr.StateDesc;
             var hx = executor.GetTensor(HX);
-            var cxDesc = StateDesc;
+            var cxDesc = descr.StateDesc;
             var cx = executor.GetTensor(CX);
             var wDesc = executor.FilterDescDict[WDesc];
             var w = executor.GetTensor(W);
-            var yDesc = YDesc;
+            var yDesc = descr.YDesc;
             var y = executor.GetTensor(Y);
-            var hyDesc = StateDesc;
+            var hyDesc = descr.StateDesc;
             var hy = executor.GetTensor(HY);
-            var cyDesc = StateDesc;
+            var cyDesc = descr.StateDesc;
             var cy = executor.GetTensor(CY);
             var workspace = executor.GetTensor(Workspace);
 
@@ -310,6 +330,8 @@ namespace AleaTK.ML.Operator
 
         public override void Backward(Executor executor)
         {
+            var descr = (RnnDescr<T>)executor.Objects[Descr];
+
             Util.EnsureTrue(IsTraining);
 
             var context = executor.Context.ToGpuContext();
@@ -332,26 +354,26 @@ namespace AleaTK.ML.Operator
 
             dnn.RNNBackwardData(
                 executor.RnnDescDict[RnnDesc],
-                SeqLength,
-                YDesc,
+                descr.SeqLength,
+                descr.YDesc,
                 executor.GetTensor(Y).Buffer.Ptr,
-                YDesc,
+                descr.YDesc,
                 executor.GetGradient(Y).Buffer.Ptr,
-                StateDesc,               
+                descr.StateDesc,               
                 new deviceptr<T>(), // executor.GetGradient(HY).Buffer.Ptr,
-                StateDesc,              
+                descr.StateDesc,              
                 new deviceptr<T>(), // executor.GetGradient(CY).Buffer.Ptr,
                 executor.FilterDescDict[WDesc],
                 executor.GetTensor(W).Buffer.Ptr,
-                StateDesc,
+                descr.StateDesc,
                 executor.GetTensor(HX).Buffer.Ptr,
-                StateDesc,
+                descr.StateDesc,
                 executor.GetTensor(CX).Buffer.Ptr,
-                XDesc,
+                descr.XDesc,
                 executor.GetGradient(X).Buffer.Ptr,
-                StateDesc,
+                descr.StateDesc,
                 executor.GetGradient(HX).Buffer.Ptr,
-                StateDesc,
+                descr.StateDesc,
                 executor.GetGradient(CX).Buffer.Ptr,
                 executor.GetTensor(Workspace).Buffer.Ptr,
                 (IntPtr) executor.GetTensor(Workspace).Shape.Length,
@@ -365,12 +387,12 @@ namespace AleaTK.ML.Operator
 
             dnn.RNNBackwardWeights(
                 executor.RnnDescDict[RnnDesc],
-                SeqLength,
-                XDesc,
+                descr.SeqLength,
+                descr.XDesc,
                 executor.GetTensor(X).Buffer.Ptr,
-                StateDesc,
+                descr.StateDesc,
                 executor.GetTensor(HX).Buffer.Ptr,
-                YDesc,
+                descr.YDesc,
                 executor.GetTensor(Y).Buffer.Ptr,
                 executor.GetTensor(Workspace).Buffer.Ptr,
                 (IntPtr) executor.GetTensor(Workspace).Shape.Length,

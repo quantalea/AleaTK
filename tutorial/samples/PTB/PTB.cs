@@ -96,7 +96,7 @@ namespace Tutorial.Samples
             AreClose(HN, myHN, 1e-6);
 
             var dH = mfr.GetDoubleArray("dH").Select(n => (float)n).ToArray();
-            exe.AssignGradientDirectly(lstm.Y, dH.AsTensor(Shape.Create(seqLength, batchSize, hiddenSize)));
+            exe.AssignGradient(lstm.Y, dH.AsTensor(Shape.Create(seqLength, batchSize, hiddenSize)), replace: true);
 
             exe.Backward();
 
@@ -231,7 +231,7 @@ namespace Tutorial.Samples
                 cy1 = exe.GetTensor(lstm.CY).Reshape(batchSize, hiddenSize).ToArray2D();
                 hy1 = exe.GetTensor(lstm.HY).Reshape(batchSize, hiddenSize).ToArray2D();
 
-                exe.AssignGradientDirectly(lstm.Y, dy.AsTensor());
+                exe.AssignGradient(lstm.Y, dy.AsTensor(), replace: true);
 
                 exe.Backward();
 
@@ -332,7 +332,7 @@ namespace Tutorial.Samples
                 cy2 = exe.GetTensor(lstm.CY).ToArray2D();
                 hy2 = exe.GetTensor(lstm.HY).ToArray2D();
 
-                exe.AssignGradientDirectly(lstm.Y, dy.AsTensor());
+                exe.AssignGradient(lstm.Y, dy.AsTensor(), replace: true);
 
                 exe.Backward();
 
@@ -342,10 +342,10 @@ namespace Tutorial.Samples
                 dw2 = exe.GetGradient(lstm.W).ToArray2D();
             }
 
-            AreClose(y1.AsTensor().ToArray(), y2.AsTensor().ToArray(), error);
+            AreClose(y1, y2, error);
             AreClose(cy1, cy2, error);
             AreClose(hy1, hy2, error);
-            AreClose(dx1.AsTensor().ToArray(), dx2.AsTensor().ToArray(), error);
+            AreClose(dx1, dx2, error);
             AreClose(dcx1, dcx2, error);
             AreClose(dhx1, dhx2, error);
             AreClose(dw1, dw2, error);
@@ -487,7 +487,7 @@ namespace Tutorial.Samples
                 return totalWords;
             }
 
-            public static void BuildVocab(string path, out Dictionary<string, int> word2id, out Dictionary<int, string> id2word)
+            public static void BuildVocabulary(string path, out Dictionary<string, int> word2id, out Dictionary<int, string> id2word)
             {
                 var data = ReadWords(path).Distinct().ToList();
                 data.Sort();
@@ -530,7 +530,7 @@ namespace Tutorial.Samples
                 var validPath = Path.Combine(dataPath, "ptb.valid.txt");
                 var testPath = Path.Combine(dataPath, "ptb.test.txt");
 
-                BuildVocab(trainPath, out WordToIdDict, out IdToWordDict);
+                BuildVocabulary(trainPath, out WordToIdDict, out IdToWordDict);
 
                 TrainData = ReadWords(trainPath).Select(WordToId).ToArray();
                 ValidData = ReadWords(validPath).Select(WordToId).ToArray();
@@ -826,7 +826,7 @@ namespace Tutorial.Samples
             Run(false, CfgType, true);
         }
 
-        [Test]
+        [Test, Ignore("Developing test")]
         public static void PrintWords()
         {
             var ptb = new Data(DataPath);

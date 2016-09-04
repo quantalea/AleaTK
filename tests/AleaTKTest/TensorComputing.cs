@@ -650,7 +650,7 @@ namespace AleaTKTest
             ctx.Assign(b, a);
             b.Print();
             var actual = b.ToArray2D();
-            var expected = CreateArray2D(333, 555, (row, col) => 5.0);
+            var expected = CreateArray(333, 555, (row, col) => 5.0);
             AreEqual(expected, actual);
         }
 
@@ -663,7 +663,7 @@ namespace AleaTKTest
             ctx.Assign(b, a);
             b.Print();
             var actual = b.ToArray2D();
-            var expected = CreateArray2D(333, 555, (row, col) => 5.0);
+            var expected = CreateArray(333, 555, (row, col) => 5.0);
             AreEqual(expected, actual);
         }
 
@@ -676,7 +676,7 @@ namespace AleaTKTest
             ctx.Assign(b, a);
             b.Print();
             var actual = b.ToArray2D();
-            var expected = CreateArray2D(333, 4, (row, col) => col + 1.0);
+            var expected = CreateArray(333, 4, (row, col) => col + 1.0);
             AreEqual(expected, actual);
         }
 
@@ -689,7 +689,7 @@ namespace AleaTKTest
             ctx.Assign(b, a);
             b.Print();
             var actual = b.ToArray2D();
-            var expected = CreateArray2D(333, 4, (row, col) => col + 1.0);
+            var expected = CreateArray(333, 4, (row, col) => col + 1.0);
             AreEqual(expected, actual);
         }
 
@@ -939,7 +939,7 @@ namespace AleaTKTest
             a.Print();
             var b = ctx.Device.Allocate<double>(Shape.Create(M, N));
             // we reduce sum the exp(a) on columns, and keepdims so it stays as a column vector.
-            var softmax = Exp(a) / (ReduceSum(Exp(a), true, 1));
+            var softmax = Exp(a) / ReduceSum(Exp(a), true, 1);
             ctx.Assign(b, softmax);
             b.Print();
 
