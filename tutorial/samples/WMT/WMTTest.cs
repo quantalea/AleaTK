@@ -13,7 +13,7 @@ using static AleaTKUtil.Common;
 
 namespace Tutorial.Samples
 {
-    public static class Test
+    public static class WmtTest
     {
         [Test]
         public static void TestCaseData()
