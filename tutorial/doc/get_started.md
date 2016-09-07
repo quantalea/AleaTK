@@ -29,7 +29,8 @@ The main abstraction of the imperative paradigm is a [tensor](https://en.wikiped
 
 In Alea TK a **tensor** has a layout defining the number of dimensions, the shape and the strides along each dimension. Shapes may be defined only partially. This is useful if certain input dimensions may change or are not yet known at design time of the computation. The actual values representing the tensor are hold in a buffer. 
 
-The imperative paradigm allows to define calculations in terms of tensor expressions. Tensor expressions are assignable to [l-values](https://en.wikipedia.org/wiki/Value_(computer_science)#lrvalue). The result of a tensor expression is usually again a tensor.
+The imperative paradigm allows to define calculations in terms of tensor expressions. Tensor expressions are assignable to [l-values](https://en.wikipedia.org/wiki/Value_(computer_science)#lrvalue)
+and can be used as [r-values](https://en.wikipedia.org/wiki/Value_(computer_science)#lrvalue) e.g. for kernel fusion.
 
 Here is an example that calculates $\pi$ with Monte Carlo simulation. Random points in the unit square are generated and we calculate how many of them are inside the unit circle. Given an execution context, which is either a CPU or a GPU device we allocate buffers for the generated points and a scalar to the simulated value of $\pi$. We define aa transformation that checks if point is inside unit square or not. The value 4.0 is because we only simulate points in positive quadrant. The actual compuations happen in the `for` loop where we iterate over multiple batches, generate random numbers, apply the transformation to count the number of points inside the unit circle followed by a mean reduction.
 
@@ -54,9 +55,7 @@ The full code for [Monte Carlo Pi](/samples/montecarlopi.html) is in the sample 
 
 #### Symbolic Computing for Machine Learning  
 
-The primary objects of the symbolic calculations are **variables** and **operators**. A variable assigns an identifier to a future calculation. Alea TK has three variable types: common, parameter, auxiliary (primarily used for temporary results). 
-
-A so called **executor** links a variable together with two tensors, one to hold the actual values or data of the variable and a second tensor that holds the gradients in a backward propagation process. The executor knows the context for the execution of the calculation which is identified by a variable and can perform memory allocation and memory management. 
+The primary objects of symbolic calculations are **variables** and **operators**. A variable assigns an identifier to a future calculation. Alea TK has three variable types: common, parameter, auxiliary (primarily used for temporary results). A variable usually holds two tensors two tensors, one to keep the actual values of the variable and a second tensor that holds the gradients in a backward propagation process. An **operator** defines a future computation, which, given input variables, generates output variables. A so called **executor** binds a variable and its computation graph to a computation context, which can be a CPU or GPU device. With an executor it is possible to run forward and backward gradient calculations and to allocate and manage the memory. 
 
 With symbolic computing we can implement various optimization algorithms to train machine learning models represented in terms of a computational graph defined with operators and variables. 
 
