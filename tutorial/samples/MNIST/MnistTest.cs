@@ -80,34 +80,43 @@ namespace Tutorial.Samples {
 
         public static Model MultiLayerPerceptronModel() {
             var images = Variable<float>(PartialShape.Create(-1, 28*28));
-            var fc1 = new FullyConnected<float>(images, 128);
-            var act1 = new ActivationReLU<float>(fc1.Output);
-            var fc2 = new FullyConnected<float>(act1.Output, 64);
-            var act2 = new ActivationReLU<float>(fc2.Output);
-            var fc3 = new FullyConnected<float>(act2.Output, 10);
+            ILayer<float> net = new FullyConnected<float>(images, 128);
+            net = new ActivationReLU<float>(net.Output);
+            net = new FullyConnected<float>(net.Output, 64);
+            net = new ActivationReLU<float>(net.Output);
+            net = new FullyConnected<float>(net.Output, 10);
             var labels = Variable<float>(PartialShape.Create(-1, 10));
 
-            return new Model {Loss = new SoftmaxCrossEntropy<float>(fc3.Output, labels), Images = images, Labels = labels};
+            return new Model {
+                Loss = new SoftmaxCrossEntropy<float>(net.Output, labels),
+                Images = images,
+                Labels = labels
+            };
         }
 
         public static Model ConvolutionalNeuralNetworkModel() {
             var images = Variable<float>();
             var labels = Variable<float>();
 
-            var conv1 = new Convolution2D<float>(images.Reshape(-1, 1, 28, 28), 5, 5, 16);
-            var act1 = new ActivationReLU<float>(conv1.Output);
-            var pool1 = new Pooling2D<float>(act1.Output, PoolingMode.MAX, 2, 2, 2, 2);
+            ILayer<float> net = new Reshape<float>(images, PartialShape.Create(-1, 1, 28, 28));
+            net = new Convolution2D<float>(net.Output, 5, 5, 16);
+            net = new ActivationReLU<float>(net.Output);
+            net = new Pooling2D<float>(net.Output, PoolingMode.MAX, 2, 2, 2, 2);
 
-            var conv2 = new Convolution2D<float>(pool1.Output, 5, 5, 32);
-            var act2 = new ActivationTanh<float>(conv2.Output);
-            var pool2 = new Pooling2D<float>(act2.Output, PoolingMode.MAX, 2, 2, 2, 2);
+            net = new Convolution2D<float>(net.Output, 5, 5, 32);
+            net = new ActivationTanh<float>(net.Output);
+            net = new Pooling2D<float>(net.Output, PoolingMode.MAX, 2, 2, 2, 2);
 
-            var res1 = pool2.Output.Reshape(-1, pool2.Output.Shape.Skip(1).Aggregate(ScalarOps.Mul));
-            var fc1 = new FullyConnected<float>(res1, 50);
-            var act3 = new ActivationTanh<float>(fc1.Output);
-            var fc2 = new FullyConnected<float>(act3.Output, 10);
+            net = new Reshape<float>(net.Output, PartialShape.Create(-1, net.Output.Shape.Skip(1).Aggregate(ScalarOps.Mul)));
+            net = new FullyConnected<float>(net.Output, 50);
+            net = new ActivationTanh<float>(net.Output);
+            net = new FullyConnected<float>(net.Output, 10);
 
-            return new Model {Loss = new SoftmaxCrossEntropy<float>(fc2.Output, labels), Images = images, Labels = labels};
+            return new Model {
+                Loss = new SoftmaxCrossEntropy<float>(net.Output, labels),
+                Images = images,
+                Labels = labels
+            };
         }
 
         [Test] public void CompareConvolutionalNeuralNetwork() {

@@ -10,8 +10,7 @@ using static AleaTK.ML.Library;
 
 namespace AleaTK.ML.Operator
 {
-    public class Convolution2D<T> : Differentiable
-    {
+    public class Convolution2D<T> : Differentiable, ILayer<T> {
         public Convolution2D(Variable<T> data, int kernelH, int kernelW, int numFilter)
         {
             Util.EnsureTrue(data.Shape.Rank == 4);
