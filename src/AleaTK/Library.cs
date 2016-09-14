@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Linq;
+using System.Security.Policy;
 using System.Threading.Tasks;
 using Alea;
 using AleaTK.ExprImpl;
@@ -362,7 +363,7 @@ namespace AleaTK
         #endregion
 
         #region Tensor data retriver
-        public static void Print<T>(this Context context, Tensor<T> tensor)
+        public static void Print<T>(this Context context, Tensor<T> tensor, bool all = false)
         {
             Task task;
 
@@ -370,14 +371,14 @@ namespace AleaTK
             // can directly print it (using RDE to sync the resource)
             if (tensor.Device == Device.CpuDevice)
             {
-                task = new Task(() => tensor.Layout.Print(tensor.Buffer.RawReader));
+                task = new Task(() => tensor.Layout.Print(tensor.Buffer.RawReader, all));
             }
             else
             {
                 // if the tensor is not on cpu, then we need make a copy of it and print it.
                 var cpuTensor = Device.CpuDevice.Allocate<T>(tensor.Layout, tensor.Memory.Length);
                 context.Copy(cpuTensor, tensor).Wait();
-                task = new Task(() => tensor.Layout.Print(cpuTensor.Buffer.RawReader));
+                task = new Task(() => tensor.Layout.Print(cpuTensor.Buffer.RawReader, all));
             }
 
             // TODO:@RDE
@@ -385,9 +386,9 @@ namespace AleaTK
             task.Wait();
         }
 
-        public static void Print<T>(this Tensor<T> tensor)
+        public static void Print<T>(this Tensor<T> tensor, bool all = false)
         {
-            Context.CpuContext.Print(tensor);
+            Context.CpuContext.Print(tensor, all);
         }
 
         public static T[] ToArray<T>(this Context context, Tensor<T> tensor)
@@ -610,6 +611,16 @@ namespace AleaTK
         {
             seed = seed ?? ((ulong) DateTime.Now.Ticks);
             return new PseudoRandomExpr<T>(shape, type, new UniformDistribution(), seed.Value, offset);
+        }
+
+        public static Expr<T> RandomUniform<T>(double from, double to, Shape shape = null, ulong? seed = null, ulong offset = 0UL,
+            PseudoRandomType type = PseudoRandomType.Default)
+        {
+            seed = seed ?? ((ulong)DateTime.Now.Ticks);
+            var width = (to - from).AsScalar<T>();
+            var origin = from.AsScalar<T>();
+            var prngExpr = new PseudoRandomExpr<T>(shape, type, new UniformDistribution(), seed.Value, offset);
+            return origin + width * prngExpr;
         }
 
         public static Expr<T> RandomNormal<T>(Shape shape = null, ulong? seed = null, ulong offset = 0UL,

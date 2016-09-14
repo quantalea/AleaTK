@@ -10,7 +10,6 @@ namespace AleaTK.ML
     {
         private Tensor _tensor = null;
         private Tensor _gradient = null;
-        private int _gradientAggregationCounter = 0;
 
         public Data(Context context, Variable variable)
         {
@@ -22,19 +21,7 @@ namespace AleaTK.ML
 
         public Variable Variable { get; }
 
-        public void ResetGradientAggregationCounter()
-        {
-            _gradientAggregationCounter = 0;
-        }
-
-        public int GradientAggregationCounter
-        {
-            get
-            {
-                _gradientAggregationCounter++;
-                return _gradientAggregationCounter - 1;
-            }
-        }
+        public int GradientAggregationCounter { get; set; } = 0;
 
         public void Initialize()
         {
@@ -105,15 +92,39 @@ namespace AleaTK.ML
             new DisposableDictionary<Symbol, RNNDescriptor>(_ => new RNNDescriptor());
         #endregion
 
-        public Executor(Context ctx, Variable loss)
+        #region Storage
+        public Dictionary<Symbol, object> Objects { get; } = new Dictionary<Symbol, object>();
+
+        public Dictionary<Symbol, IDisposable> Disposables { get; } = new Dictionary<Symbol, IDisposable>();
+        #endregion
+
+        #region Properties
+        public Context Context { get; }
+
+        public Variable Output { get; }
+
+        public bool AssignAllGradient { get; set; } = false;
+
+        public IEnumerable<Differentiable> ForwardOrder => _forwardOrder;
+
+        public IEnumerable<Differentiable> BackwardOrder => _backwardOrder;
+
+        public IEnumerable<Data> Data => _data.Values;
+
+        public Data GetData(Variable var)
+        {
+            return _data[var];
+        }
+        #endregion
+
+        public Executor(Context ctx, Variable output)
         {
             Context = ctx;
-            AddData(loss);
-            SetForwardOrder(loss);
-            _backwardOrder = ((IEnumerable<Differentiable>) _forwardOrder).Reverse().ToList();
+            Output = output;
+            AddData(output);
+            SetForwardOrder(output);
+            _backwardOrder = ((IEnumerable<Differentiable>)_forwardOrder).Reverse().ToList();
         }
-
-        public Context Context { get; }
 
         #region Set order
         private void SetForwardOrder(Variable variable)
@@ -186,11 +197,271 @@ namespace AleaTK.ML
         }
         #endregion
 
-        public IEnumerable<Differentiable> ForwardOrder => _forwardOrder;
+        #region Get/Set variable tensor
+        /// <summary>
+        /// Get variable tensor. The variable tensor is assumed to be allocated already,
+        /// if not, an exception will be thrown. This is usually used for getting input
+        /// variable tensor.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <returns></returns>
+        public Tensor<T> GetTensor<T>(Variable<T> variable)
+        {
+            var data = _data[variable];
+            return data.Tensor.Cast<T>();
+        }
 
-        public IEnumerable<Differentiable> BackwardOrder => _backwardOrder;
+        /// <summary>
+        /// Get variable tesnor. If the variable tensor is not allocated or it is
+        /// allocated but not large enough for holding the shape, then a new allocation
+        /// will be triggered. This is usually used for output variable tensor.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <param name="shape"></param>
+        /// <returns></returns>
+        public Tensor<T> GetTensor<T>(Variable<T> variable, Shape shape)
+        {
+            var layout = new Layout(shape);
+            var data = _data[variable];
+            return data.GetOrAllocateTensor(layout, shape.Length).Cast<T>();
+        }
 
-        public IEnumerable<Data> Data => _data.Values; 
+        /// <summary>
+        /// Set variable tensor to an exists tensor (referencing tensor). The tensor must 
+        /// be allocated in the same device of this executor.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <param name="tensor"></param>
+        public void SetTensor<T>(Variable<T> variable, Tensor<T> tensor)
+        {
+            Util.EnsureTrue(tensor.Device == Context.Device, "Set gradient is reference, must be in same device.");
+            var data = _data[variable];
+            data.SetTensor(tensor.ToTensor());
+        }
+
+        /// <summary>
+        /// Assign variable tensor from another tensor (copy may happen if the src tensor 
+        /// is not in the same device of this executor).
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <param name="srcTensor"></param>
+        /// <returns></returns>
+        public Task AssignTensor<T>(Variable<T> variable, Tensor<T> srcTensor)
+        {
+            var data = _data[variable];
+            var blob = data.GetOrAllocateTensor(srcTensor.Layout, srcTensor.Memory.Length);
+            var dstTensor = blob.Cast<T>();
+            return Context.Copy(dstTensor, srcTensor);
+        }
+
+        /// <summary>
+        /// Assign variable tensor from an expression.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <param name="expr"></param>
+        /// <returns></returns>
+        public Task AssignTensor<T>(Variable<T> variable, Expr<T> expr)
+        {
+            var shape = expr.Shape;
+            var layout = new Layout(shape);
+            var length = layout.Shape.Length;
+            var data = _data[variable];
+            var blob = data.GetOrAllocateTensor(layout, length);
+            var tensor = blob.Cast<T>();
+            return Context.Assign(tensor, expr);
+        }
+        #endregion
+
+        #region Get/Set variable gradient
+        /// <summary>
+        /// Get variable gradient. The variable gradient is assumed to be allocated already,
+        /// if not, an exception will be thrown. This is usually used for getting output
+        /// variable gradient.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <returns></returns>
+        public Tensor<T> GetGradient<T>(Variable<T> variable)
+        {
+            var data = _data[variable];
+            return data.Gradient.Cast<T>();
+        }
+
+        /// <summary>
+        /// Get variable gradient together with its aggregation counter. The variable gradient
+        /// is assumed to be allocated already, if not, an exception will be thrown. This is
+        /// usually used for getting output variable gradient.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <param name="aggregationCounter"></param>
+        /// <returns></returns>
+        public Tensor<T> GetGradient<T>(Variable<T> variable, out int aggregationCounter)
+        {
+            var data = _data[variable];
+            aggregationCounter = data.GradientAggregationCounter;
+            return data.Gradient.Cast<T>();
+        }
+
+        /// <summary>
+        /// Get variable gradient. If the variable gradient is not allocated or it is
+        /// allocated but not large enough for holding the shape, then a new allocation
+        /// will be triggered. This is usually used for input variable gradient.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <param name="shape"></param>
+        /// <returns></returns>
+        public Tensor<T> GetGradient<T>(Variable<T> variable, Shape shape)
+        {
+            var layout = new Layout(shape);
+            var data = _data[variable];
+            return data.GetOrAllocateGradient(layout, shape.Length).Cast<T>();
+        }
+
+        /// <summary>
+        /// Get variable gradient together with its aggregation counter. If the variable gradient
+        /// is not allocated or it is allocated but not large enough for holding the shape, then
+        /// a new allocation will be triggered. This is usually used for input variable gradient.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <param name="shape"></param>
+        /// <param name="aggregationCounter"></param>
+        /// <returns></returns>
+        public Tensor<T> GetGradient<T>(Variable<T> variable, Shape shape, out int aggregationCounter)
+        {
+            var layout = new Layout(shape);
+            var data = _data[variable];
+            aggregationCounter = data.GradientAggregationCounter;
+            return data.GetOrAllocateGradient(layout, shape.Length).Cast<T>();
+        }
+
+        /// <summary>
+        /// Set variable gradient to an exists tensor (referencing tensor).
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <param name="gradient"></param>
+        /// <param name="counter"></param>
+        public void SetGradient<T>(Variable<T> variable, Tensor<T> gradient, int counter = 1)
+        {
+            Util.EnsureTrue(gradient.Device == Context.Device, "Set gradient is reference, must be in same device.");
+            var data = _data[variable];
+            data.GradientAggregationCounter = counter;
+            data.SetGradient(gradient.ToTensor());
+        }
+
+        /// <summary>
+        /// Assign variable gradient from an expression. If replace is false, then the previouse
+        /// gradient will be add to current gradient.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <param name="expr"></param>
+        /// <param name="aggregateCounter"></param>
+        /// <param name="replace"></param>
+        /// <returns></returns>
+        public Task AssignGradient<T>(Variable<T> variable, Expr<T> expr, int aggregateCounter = 1, bool replace = false)
+        {
+            if (!replace && !AssignAllGradient && !variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
+
+            var data = _data[variable];
+            if (replace)
+            {
+                var shape = data.Tensor.Layout.Shape;
+                var layout = new Layout(shape);
+                var length = layout.Shape.Length;
+                var blob = data.GetOrAllocateGradient(layout, length);
+                var tensor = blob.Cast<T>();
+                data.GradientAggregationCounter = aggregateCounter;
+                return Context.Assign(tensor, expr);
+            }
+            else
+            {
+                var currentAggregationCounter = data.GradientAggregationCounter;
+                data.GradientAggregationCounter += aggregateCounter;
+                if (currentAggregationCounter <= 0)
+                {
+                    var shape = data.Tensor.Layout.Shape;
+                    var layout = new Layout(shape);
+                    var length = layout.Shape.Length;
+                    var blob = data.GetOrAllocateGradient(layout, length);
+                    var tensor = blob.Cast<T>();
+                    return Context.Assign(tensor, expr);
+                }
+                else
+                {
+                    var grad = data.GradientAsExpr;
+                    return Context.Assign(data.GradientAsValue, grad + expr);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Assign variable gradient by a tensor.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="variable"></param>
+        /// <param name="tensor"></param>
+        /// <param name="aggregateCounter"></param>
+        /// <param name="replace"></param>
+        /// <returns></returns>
+        public Task AssignGradient<T>(Variable<T> variable, Tensor<T> tensor, int aggregateCounter = 1, bool replace = false)
+        {
+            if (!replace && !AssignAllGradient && !variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
+
+            if (Context.Device == tensor.Device)
+            {
+                return AssignGradient(variable, (Expr<T>) tensor, aggregateCounter, replace);
+            }
+            else if (replace)
+            {
+                var data = _data[variable];
+                var blob = data.GetOrAllocateGradient(tensor.Layout, tensor.Memory.Length);
+                var dstTensor = blob.Cast<T>();
+                data.GradientAggregationCounter = aggregateCounter;
+                return Context.Copy(dstTensor, tensor);
+            }
+            else
+            {
+                throw new NotImplementedException();
+            }
+        }
+        #endregion
+
+        public int GetGradientAggregationCounter(Variable var)
+        {
+            var data = _data[var];
+            return data.GradientAggregationCounter;
+        }
+
+        public void SetGradientAggregationCounter(Variable var, int aggregationCounter)
+        {
+            var data = _data[var];
+            data.GradientAggregationCounter = aggregationCounter;
+        }
+
+        public int IncreaseGradientAggregationCounter(Variable var, int increasing = 1)
+        {
+            var data = _data[var];
+            var oldCounter = data.GradientAggregationCounter;
+            data.GradientAggregationCounter += increasing;
+            return oldCounter;
+        }
+
+        public void ClearGradientAggregationCounters()
+        {
+            foreach (var data in Data)
+            {
+                data.GradientAggregationCounter = 0;
+            }
+        }
 
         public virtual void Initalize()
         {
@@ -207,115 +478,6 @@ namespace AleaTK.ML
             }
         }
 
-        public void SetTensor<T>(Variable<T> variable, Tensor<T> tensor)
-        {
-            Util.EnsureTrue(tensor.Device == Context.Device, "Set tensor is reference, must be in same device.");
-            var data = _data[variable];
-            data.SetTensor(tensor.ToTensor());
-        }
-
-        public void SetGradient<T>(Variable<T> variable, Tensor<T> gradient)
-        {
-            Util.EnsureTrue(gradient.Device == Context.Device, "Set gradient is reference, must be in same device.");
-            var data = _data[variable];
-            data.SetGradient(gradient.ToTensor());
-        }
-
-        public Tensor<T> GetTensor<T>(Variable<T> variable, Shape shape)
-        {
-            var layout = new Layout(shape);
-            var data = _data[variable];
-            return data.GetOrAllocateTensor(layout, shape.Length).Cast<T>();
-        }
-
-        public Tensor<T> GetGradient<T>(Variable<T> variable, Shape shape)
-        {
-            var layout = new Layout(shape);
-            var data = _data[variable];
-            return data.GetOrAllocateGradient(layout, shape.Length).Cast<T>();
-        }
-
-        public Data GetData(Variable var)
-        {
-            return _data[var];
-        }
-
-        public Tensor<T> GetTensor<T>(Variable<T> variable)
-        {
-            var data = _data[variable];
-            return data.Tensor.Cast<T>();
-        }
-
-        public Tensor<T> GetGradient<T>(Variable<T> variable)
-        {
-            var data = _data[variable];
-            return data.Gradient.Cast<T>();
-        }
-
-        public Task AssignTensor<T>(Variable<T> variable, Tensor<T> srcTensor)
-        {
-            var data = _data[variable];
-            var blob = data.GetOrAllocateTensor(srcTensor.Layout, srcTensor.Memory.Length);
-            var dstTensor = blob.Cast<T>();
-            return Context.Copy(dstTensor, srcTensor);
-        }
-
-        public Task AssignTensor<T>(Variable<T> variable, Expr<T> expr)
-        {
-            var shape = expr.Shape;
-            var layout = new Layout(shape);
-            var length = layout.Shape.Length;
-            var data = _data[variable];
-            var blob = data.GetOrAllocateTensor(layout, length);
-            var tensor = blob.Cast<T>();
-            return Context.Assign(tensor, expr);
-        }
-
-        public Task AssignGradient<T>(Variable<T> variable, Expr<T> expr)
-        {
-            if (!variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
-
-            var data = _data[variable];
-            var counter = data.GradientAggregationCounter;
-            if (counter == 0)
-            {
-                var shape = data.Tensor.Layout.Shape;
-                var layout = new Layout(shape);
-                var length = layout.Shape.Length;
-                var blob = data.GetOrAllocateGradient(layout, length);
-                var tensor = blob.Cast<T>();
-                return Context.Assign(tensor, expr);
-            }
-            else
-            {
-                var grad = data.GradientAsExpr;
-                return Context.Assign(data.GradientAsValue, grad + expr);
-            }
-        }
-
-        public Task AssignGradientDirectly<T>(Variable<T> variable, Tensor<T> srcTensor)
-        {
-            //if (!variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
-
-            var data = _data[variable];
-            var blob = data.GetOrAllocateGradient(srcTensor.Layout, srcTensor.Memory.Length);
-            var dstTensor = blob.Cast<T>();
-            return Context.Copy(dstTensor, srcTensor);
-        }
-
-        public Task AssignGradientDirectly<T>(Variable<T> variable, Expr<T> expr)
-        {
-            //if (!variable.HasOwner && variable.Type != VariableType.Parameter) return Task.Run(() => { });
-
-            var data = _data[variable];
-            var shape = data.Tensor.Layout.Shape;
-            var layout = new Layout(shape);
-            var length = layout.Shape.Length;
-            var blob = data.GetOrAllocateGradient(layout, length);
-            var tensor = blob.Cast<T>();
-            return Context.Assign(tensor, expr);
-        }
-
         public void Forward()
         {
             foreach (var op in ForwardOrder)
@@ -324,11 +486,14 @@ namespace AleaTK.ML
             }
         }
 
-        public void Backward()
+        public void Backward(bool clearGradientAggretionCounter = true)
         {
-            foreach (var data in Data)
+            if (clearGradientAggretionCounter)
             {
-                data.ResetGradientAggregationCounter();
+                foreach (var data in Data)
+                {
+                    data.GradientAggregationCounter = 0;
+                }
             }
 
             foreach (var op in BackwardOrder)

@@ -47,6 +47,7 @@ let documents =
         "tutorials.md"
         "how_to.md"
         "ml_tools.md"
+        "design_details.md"
         "resources.md"
     ] 
 

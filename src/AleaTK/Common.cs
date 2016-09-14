@@ -446,6 +446,17 @@ namespace AleaTK
             }
         }
 
+        public static int FirstIndex<T>(this IEnumerable<T> ie, Func<T, bool> pred)
+        {
+            var i = 0;
+            foreach (var e in ie)
+            {
+                if (pred(e)) return i;
+                i++;
+            }
+            return i;
+        }
+
         public static void Dump(this TensorDescriptor desc)
         {
             DataType dataType;
