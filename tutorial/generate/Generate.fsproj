@@ -62,12 +62,10 @@
     <None Include="SampleGallery.tpl" />
     <None Include="ExtendedSampleDoc.tpl" />
     <None Include="readme.md" />
-    <Content Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FakeLib">
-      <HintPath>..\..\packages\FAKE.Lib.4.39.1\lib\net451\FakeLib.dll</HintPath>
-      <Private>True</Private>
+      <HintPath>..\..\packages\FAKE\tools\FakeLib.dll</HintPath>
     </Reference>
     <Reference Include="FSharp.Data.TypeProviders" />
     <Reference Include="mscorlib" />
