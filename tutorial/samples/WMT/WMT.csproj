@@ -141,4 +141,5 @@
     </When>
   </Choose>
   <Import Project="..\..\..\packages\Alea\build\Alea.targets" Condition="Exists('..\..\..\packages\Alea\build\Alea.targets')" Label="Paket" />
+  <Import Project="..\..\..\.paket\paket.targets" />
 </Project>
