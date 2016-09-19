@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.25123.0
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{98935CC7-9E54-4EE6-9DBF-8F7B8F180D8A}"
 EndProject
@@ -34,8 +34,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "root", "root", "{1B0B8104-5
 		build.bat = build.bat
 		build.fsx = build.fsx
 		index.html = index.html
+		LICENSE = LICENSE
 		paket.dependencies = paket.dependencies
 		paket.lock = paket.lock
+		README.md = README.md
 		SolutionInfo.cs = SolutionInfo.cs
 		SolutionInfo.fs = SolutionInfo.fs
 		Version.fsx = Version.fsx
