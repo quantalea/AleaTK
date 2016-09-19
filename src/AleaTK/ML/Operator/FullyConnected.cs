@@ -5,8 +5,7 @@ using static AleaTK.ML.Library;
 
 namespace AleaTK.ML.Operator
 {
-    public class FullyConnected<T> : Differentiable
-    {
+    public class FullyConnected<T> : Differentiable, ILayer<T> {
         public FullyConnected(Variable<T> data, long numHidden)
         {
             Util.EnsureTrue(data.HasShape);

@@ -38,4 +38,8 @@ namespace AleaTK.ML
         {
         }
     }
+
+    public interface ILayer<T> {
+        Variable<T> Output { get; }
+    }
 }

@@ -3,8 +3,7 @@ using static AleaTK.ML.Library;
 
 namespace AleaTK.ML.Operator
 {
-    public abstract class Activation<T> : Differentiable
-    {
+    public abstract class Activation<T> : Differentiable, ILayer<T> {
         protected Activation(Variable<T> input)
         {
             Input = input;
@@ -35,8 +34,7 @@ namespace AleaTK.ML.Operator
         protected abstract Expr<T> BackwardExpr(Tensor<T> output);
     }
 
-    public class ActivationReLU<T> : Activation<T>
-    {
+    public class ActivationReLU<T> : Activation<T> {
         public ActivationReLU(Variable<T> input) : base(input) { }
 
         protected override Expr<T> ForwardExpr(Tensor<T> input) { return Max(input, 0.0.AsScalar<T>()); }

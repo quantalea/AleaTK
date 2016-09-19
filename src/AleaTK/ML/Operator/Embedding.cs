@@ -6,8 +6,7 @@ using static AleaTK.Library;
 
 namespace AleaTK.ML.Operator
 {
-    public class Embedding<T> : Differentiable
-    {
+    public class Embedding<T> : Differentiable, ILayer<T> {
         public Embedding(Variable<int> indices, int embedSize, int embedDim, double initScale = 0.5)
         {
             Indices = indices;

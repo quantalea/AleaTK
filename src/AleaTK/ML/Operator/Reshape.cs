@@ -8,8 +8,7 @@ using static AleaTK.ML.Library;
 
 namespace AleaTK.ML.Operator
 {
-    public class Reshape<T> : Differentiable
-    { 
+    public class Reshape<T> : Differentiable, ILayer<T> { 
         public Reshape(Variable<T> input, PartialShape shape)
         {
             Util.EnsureTrue(input.Type != VariableType.Parameter);

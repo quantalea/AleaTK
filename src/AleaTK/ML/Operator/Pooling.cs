@@ -4,8 +4,7 @@ using static AleaTK.ML.Library;
 
 namespace AleaTK.ML.Operator
 {
-    public class Pooling2D<T> : Differentiable
-    {
+    public class Pooling2D<T> : Differentiable, ILayer<T> {
         public Pooling2D(Variable<T> data, PoolingMode mode, int kernelH, int kernelW, int strideH, int strideW)
         {
             Descriptor = new PoolingDescriptor();
