@@ -49,6 +49,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BinPackingLab.cs" />
     <Compile Include="Common.cs" />
     <Compile Include="Experiment.cs" />
     <Compile Include="GradientChecker.cs" />
