@@ -206,6 +206,7 @@ Target "Test" (fun _ ->
                 match name with
                 | "MNIST" -> ignoreTest "Sample" name
                 | "PTB" -> ignoreTest "Sample" name
+                | "WMT" -> ignoreTest "Sample" name
                 | name when (File.Exists("release" @@ (sprintf "%s.exe" name))) -> sprintf "%s.exe" name |> Some
                 | name when (File.Exists("release" @@ (sprintf "%s.dll" name))) -> sprintf "%s.dll" name |> Some
                 | name -> ignoreTest "Sample" name )
