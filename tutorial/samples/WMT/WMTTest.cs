@@ -89,7 +89,7 @@ namespace Tutorial.Samples
             }
         }
 
-        [Test]
+        [Test, Ignore("Please run this explicitly.")]
         public static void BackTranslate()
         {
             var vocabulary1 = Vocabulary.Load(Data.Name("english_vocabulary.txt"));
@@ -117,7 +117,7 @@ namespace Tutorial.Samples
             Data.Display(en, fr, 1000);
         }
 
-        [Test]
+        [Test, Ignore("Please run this explicitly.")]
         public static void TestBucketing()
         {
             Tuple<int, int>[] buckets = { new Tuple<int, int>(10, 15), new Tuple<int, int>(20, 25), new Tuple<int, int>(40, 50), new Tuple<int, int>(50, 60) };
@@ -130,7 +130,7 @@ namespace Tutorial.Samples
             Console.WriteLine($"data points : {numDataPoints}, skipped : {bucketed.Skipped} of total {numDataPoints + bucketed.Skipped}");
         }
 
-        [Test]
+        [Test, Ignore("Please run this explicitly.")]
         public static void TestBatching()
         {
             Gpu.Get(0);
