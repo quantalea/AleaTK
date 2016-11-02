@@ -2,8 +2,7 @@ content: none
 source https://www.nuget.org/api/v2
 source http://nuget.aleagpu.com/nuget
 source http://beta.aleagpu.com/nuget
-nuget Alea 3.0.0-beta19
-nuget Alea.Parallel 3.0.0-beta19
+nuget Alea 3.0.2-beta1
 nuget CSMatIO
 nuget Fake
 nuget Nuget.CommandLine
