@@ -15,7 +15,7 @@ namespace Tutorial.Samples
 {
     public static class WmtTest
     {
-        [Test]
+        [Test, Ignore("Please run this explicitly.")]
         public static void TestCaseData()
         {
             Data.EnsureDataFile();
