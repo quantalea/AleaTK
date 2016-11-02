@@ -154,7 +154,7 @@ namespace AleaTK.ExprImpl
                         var stream = assignment.Context.ToGpuContext().Stream;
 
                         // This is a quick fix, it is not good performance
-                        stream.For(0L, cols, col =>
+                        stream.LongFor(0L, cols, col =>
                         {
                             var acc = read(0L, col);
                             for (var row = 1L; row < rows; ++row)

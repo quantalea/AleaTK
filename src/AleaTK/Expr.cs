@@ -508,7 +508,7 @@ namespace AleaTK
             if (Context.Type == ContextType.Gpu)
             {
                 var stream = Context.ToGpuContext().Stream;
-                stream.For(0L, length, i => write(i, read(i)));
+                stream.LongFor(0L, length, i => write(i, read(i)));
                 return true;
             }
 
@@ -531,7 +531,7 @@ namespace AleaTK
             if (Context.Type == ContextType.Gpu)
             {
                 var stream = Context.ToGpuContext().Stream;
-                stream.For(0L, rows * cols, i =>
+                stream.LongFor(0L, rows * cols, i =>
                 {
                     var row = i / cols;
                     var col = i % cols;
@@ -566,7 +566,7 @@ namespace AleaTK
             if (Context.Type == ContextType.Gpu)
             {
                 var stream = Context.ToGpuContext().Stream;
-                stream.For(0L, l0*l1*l2, i =>
+                stream.LongFor(0L, l0*l1*l2, i =>
                 {
                     var i0 = i/(l1*l2);
                     var i1 = (i%(l1*l2))/l2;

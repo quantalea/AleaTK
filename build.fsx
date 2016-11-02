@@ -267,8 +267,7 @@ Target "Package" (fun _ ->
             |> CopyFiles libDir
 
             let dependencies =
-                [ "Alea"                , GetPackageVersion "packages" "Alea" |> equalVersion
-                  "Alea.Parallel"       , GetPackageVersion "packages" "Alea.Parallel" |> equalVersion ]
+                [ "Alea"                , GetPackageVersion "packages" "Alea" |> equalVersion ]
 
             NuGet (fun p ->
                 { p with

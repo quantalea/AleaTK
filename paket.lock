@@ -1,9 +1,7 @@
 CONTENT: NONE
 NUGET
   remote: https://www.nuget.org/api/v2
-    Alea (3.0.0-beta19)
-    Alea.Parallel (3.0.0-beta19)
-      Alea (3.0.0-beta19)
+    Alea (3.0.2-beta1)
     CSMatIO (1.0.2)
       zlib.net (>= 1.0.4)
     FAKE (4.28)
