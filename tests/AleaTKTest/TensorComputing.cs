@@ -506,6 +506,38 @@ namespace AleaTKTest
         }
 
         [Test]
+        public static void Reduce2DMeanByRowGPU()
+        {
+            var ctx = gpu;
+     
+            var input = RandomNormal<float>(Shape.Create(1000, 10), 0UL);
+            var inputTensor = ctx.Eval(input);
+            var inputArray = inputTensor.ToArray2D();
+            var expectedOutput = ReduceToColumnMeans(inputArray);
+
+            var outputTensor = ctx.Eval(ReduceMean(input, 0));
+            var actualOutput = outputTensor.ToArray();
+
+            Assert.That(actualOutput, Is.EqualTo(expectedOutput).AsCollection.Within(1e-5));
+        }
+
+        [Test]
+        public static void Reduce2DMeanByColumnGPU()
+        {
+            var ctx = gpu;
+
+            var input = RandomNormal<float>(Shape.Create(10, 1000), 0UL);
+            var inputTensor = ctx.Eval(input);
+            var inputArray = inputTensor.ToArray2D();
+            var expectedOutput = ReduceToRowMeans(inputArray);
+
+            var outputTensor = ctx.Eval(ReduceMean(input, 1));
+            var actualOutput = outputTensor.ToArray();
+
+            Assert.That(actualOutput, Is.EqualTo(expectedOutput).AsCollection.Within(1e-5));
+        }
+
+        [Test]
         public static void AssignUniformRandomCpu()
         {
             var ctx = cpu;
