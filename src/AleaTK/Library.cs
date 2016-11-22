@@ -429,7 +429,7 @@ namespace AleaTK
             var l2 = tensor.Layout.Shape.Skip(2).Aggregate(ScalarOps.Mul);
             var array = new T[l0, l1, l2];
             var cpuTensor = array.AsTensor();
-            context.Copy(cpuTensor, tensor).Wait();
+            context.Copy(cpuTensor, tensor.Reshape(l0, l1, l2)).Wait();
             return array;
         }
 
