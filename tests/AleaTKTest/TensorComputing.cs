@@ -156,6 +156,21 @@ namespace AleaTKTest
         }
 
         [Test]
+        public static void PowerGPU()
+        {
+            var ctx = gpu;
+
+            var input = RandomNormal<float>(Shape.Create(100), 0UL);
+            var inputTensor = ctx.Eval(input);
+            var inputArray = inputTensor.ToArray();
+            var expectedOutput = inputArray.Select(x => Math.Pow(x, -1.5)).ToArray();
+            var outputTensor = ctx.Eval(Pow(input, -1.5.AsScalar<float>()));
+            var actualOutput = outputTensor.ToArray();
+
+            Assert.That(actualOutput, Is.EqualTo(expectedOutput).AsCollection.Within(1e-3));
+        }
+
+        [Test]
         public static void SimpleMathGpu()
         {
             var ctx = gpu;

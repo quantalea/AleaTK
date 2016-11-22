@@ -101,6 +101,16 @@ namespace AleaTK
                 OpCodes.Dot, typeof(float), typeof(float));
             #endregion
 
+            #region Pow
+            ExprRegistry.Register<double>(
+                (exprParam, inputExprs) => Map(inputExprs[0].CastExpr<double>(), inputExprs[1].CastExpr<double>(), DeviceFunction.Pow, OpCodes.Pow),
+                OpCodes.Pow, typeof(double), typeof(double));
+
+            ExprRegistry.Register<float>(
+                (exprParam, inputExprs) => Map(inputExprs[0].CastExpr<float>(), inputExprs[1].CastExpr<float>(), DeviceFunction.Pow, OpCodes.Pow),
+                OpCodes.Pow, typeof(float), typeof(float));
+            #endregion
+
             #region Max
             ExprRegistry.Register<double>(
                 (exprParam, inputExprs) =>
@@ -567,6 +577,11 @@ namespace AleaTK
         public static Expr<T> Max<T>(Expr<T> a, Expr<T> b)
         {
             return ExprRegistry.Create<T>(OpCodes.Max, a, b);
+        }
+
+        public static Expr<T> Pow<T>(Expr<T> a, Expr<T> b)
+        {
+            return ExprRegistry.Create<T>(OpCodes.Pow, a, b);
         }
 
         public static Expr<T> ReLUGrad<T>(Expr<T> a)
