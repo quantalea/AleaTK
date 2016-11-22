@@ -598,12 +598,17 @@ namespace AleaTK
 
         public static Expr<T> ReduceMean<T>(Expr<T> a, bool keepDims, params int[] reductionIndices)
         {
-            return ReduceSum(a, keepDims, reductionIndices) / (a.Shape.Length.AsScalar<T>());
+            if (reductionIndices == null || reductionIndices.Length == 0)
+            {
+                reductionIndices = Enumerable.Range(0, a.Shape.Rank).ToArray();
+            }
+            var numberOfElements = reductionIndices.Select(index => a.Shape[index]).Aggregate((x, y) => x * y);
+            return ReduceSum(a, keepDims, reductionIndices) / (numberOfElements.AsScalar<T>());
         }
 
         public static Expr<T> ReduceMean<T>(Expr<T> a, params int[] reductionIndices)
         {
-            return ReduceSum(a, reductionIndices) / (a.Shape.Length.AsScalar<T>());
+            return ReduceMean(a, false, reductionIndices);
         }
 
         public static Expr<T> RandomUniform<T>(Shape shape = null, ulong? seed = null, ulong offset = 0UL,
