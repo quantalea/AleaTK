@@ -50,12 +50,12 @@ for (var i = 0; i < batchs; ++i)
 }
 ```
 
-The full code for [Monte Carlo Pi](/samples/montecarlopi.html) is in the sample gallery.
+The full code for [Monte Carlo Pi](samples/montecarlopi.html) is in the sample gallery.
 
 
 #### Symbolic Computing for Machine Learning  
 
-The primary objects of symbolic calculations are **variables** and **operators**. A variable assigns an identifier to a future calculation. Alea TK has three variable types: common, parameter, auxiliary (primarily used for temporary results). A variable usually holds two tensors two tensors, one to keep the actual values of the variable and a second tensor that holds the gradients in a backward propagation process. An **operator** defines a future computation, which, given input variables, generates output variables. A so called **executor** binds a variable and its computation graph to a computation context, which can be a CPU or GPU device. With an executor it is possible to run forward and backward gradient calculations and to allocate and manage the memory. 
+The primary objects of symbolic calculations are **variables** and **operators**. A variable assigns an identifier to a future calculation. Alea TK has three variable types: common, parameter, auxiliary (primarily used for temporary results). A variable usually holds two tensors, one to keep the actual values of the variable and a second tensor that holds the gradients in a backward propagation process. An **operator** defines a future computation, which, given input variables, generates output variables. A so called **executor** binds a variable and its computation graph to a computation context, which can be a CPU or GPU device. With an executor it is possible to run forward and backward gradient calculations and to allocate and manage the memory. 
 
 With symbolic computing we can implement various optimization algorithms to train machine learning models represented in terms of a computational graph defined with operators and variables. 
 
@@ -82,7 +82,7 @@ var loss = new SoftmaxCrossEntropy<float>(fc2.Output, labels);
 
 ```
 
-It uses variables and operators to express the layers of the network. The [MNIST](/samples/mnist.html) sample shows how to use such a convolutional neural network for image classification. 
+It uses variables and operators to express the layers of the network. The [MNIST](samples/mnist.html) sample shows how to use such a convolutional neural network for image classification. 
 
 
 ### Highlights
@@ -98,9 +98,9 @@ It is worth mentioning that Alea TK has some unique features such as
 ### Next Steps
 ***
 
-- Read the [tutorials](/tutorials.html) to get a deeper understanding of Alea TK and how it can be used to develop and train machine learning models
+- Read the [tutorials](tutorials.html) to get a deeper understanding of Alea TK and how it can be used to develop and train machine learning models
 
-- If you are looking for self contained examples as starting point for developing new models check out the [sample gallery](/gallery.html)
+- If you are looking for self contained examples as starting point for developing new models check out the [sample gallery](gallery.html)
 
-- The [how to](/how_to.html) section addresses topics such as how to extend Alea TK or how to contribute to the project
+- The [how to](how_to.html) section addresses topics such as how to extend Alea TK or how to contribute to the project
 
