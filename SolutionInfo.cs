@@ -4,12 +4,12 @@ using System.Reflection;
 [assembly: AssemblyProductAttribute("Alea TK")]
 [assembly: AssemblyCompanyAttribute("QuantAlea AG.")]
 [assembly: AssemblyCopyrightAttribute("QuantAlea AG. 2016-2016")]
-[assembly: AssemblyVersionAttribute("0.9.0.4")]
-[assembly: AssemblyFileVersionAttribute("0.9.0.4")]
-[assembly: AssemblyInformationalVersionAttribute("0.9.0.4")]
+[assembly: AssemblyVersionAttribute("0.9.0.5")]
+[assembly: AssemblyFileVersionAttribute("0.9.0.5")]
+[assembly: AssemblyInformationalVersionAttribute("0.9.0.5")]
 namespace System {
     internal static class AssemblyVersionInformation {
-        internal const string Version = "0.9.0.4";
-        internal const string InformationalVersion = "0.9.0.4";
+        internal const string Version = "0.9.0.5";
+        internal const string InformationalVersion = "0.9.0.5";
     }
 }

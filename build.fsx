@@ -14,11 +14,11 @@ Directory.SetCurrentDirectory __SOURCE_DIRECTORY__
 
 // Check versions before making release
 // e.x: Some "beta", None (for stable)
-let versionType = Some "beta"
+let versionType = None
 let majorVersion = 0
 let minorVersion = 9
 let patchVersion = 0
-let buildVersion = 4
+let buildVersion = 5
 // End of version section
 
 let version = sprintf "%d.%d.%d.%d" majorVersion minorVersion patchVersion buildVersion
