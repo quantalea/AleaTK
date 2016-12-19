@@ -9,7 +9,10 @@ Check out the source from the repository. Alea TK uses [paket](https://fsproject
 .paket\paket.exe restore
 ```
 
-to download the required NuGet packages. Then open the Visual Studio solution and build the projects.
+to download the required NuGet packages. 
+
+Install [CUDA 7.5](https://developer.nvidia.com/cuda-75-downloads-archive) and [cuDNN 5.1](https://developer.nvidia.com/rdp/cudnn-download) for CUDA 7.5. Set your build configuration to x64.
+Then open the Visual Studio solution and build the projects.
 
 ### Build Documentation {#build_doc}
 ***
