@@ -228,6 +228,34 @@ namespace AleaTKUtil
             return Enumerable.Range(0, numElements).Select(_ => (float)(Random.NextDouble() * (maxValue - minValue) + minValue)).ToArray();
         }
 
+        public static float[] ReduceToColumnMeans(float [,]array)
+        {
+            var output = new float[array.GetLength(1)];
+            for (var column = 0; column < output.Length; ++column)
+            {
+                for (var row = 0; row < array.GetLength(0); ++row)
+                {
+                    output[column] += array[row, column];
+                }
+                output[column] /= array.GetLength(0);
+            }
+            return output;
+        }
+
+        public static float[] ReduceToRowMeans(float[,] array)
+        {
+            var output = new float[array.GetLength(0)];
+            for (var row = 0; row < output.Length; ++row)
+            {
+                for (var column = 0; column < array.GetLength(1); ++column)
+                {
+                    output[row] += array[row, column];
+                }
+                output[row] /= array.GetLength(1);
+            }
+            return output;
+        }
+
         public static void Dump<T>(T[] array)
         {
             for (var i = 0; i < array.Length; ++i)
