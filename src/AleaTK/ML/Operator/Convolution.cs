@@ -11,7 +11,7 @@ using static AleaTK.ML.Library;
 namespace AleaTK.ML.Operator
 {
     public class Convolution2D<T> : Differentiable, ILayer<T> {
-        public Convolution2D(Variable<T> data, int kernelH, int kernelW, int numFilter)
+        public Convolution2D(Variable<T> data, int kernelH, int kernelW, int numFilter, int paddingH = 0, int paddingW = 0)
         {
             Util.EnsureTrue(data.Shape.Rank == 4);
             Util.EnsureTrue(data.Shape[1] > 0);
@@ -25,7 +25,7 @@ namespace AleaTK.ML.Operator
 
             // fixed padding and stride now
             ConvolutionDesc = new ConvolutionDescriptor();
-            ConvolutionDesc.Set2D(0, 0, 1, 1, 1, 1, ConvolutionMode.CROSS_CORRELATION);
+            ConvolutionDesc.Set2D(paddingH, paddingW, 1, 1, 1, 1, ConvolutionMode.CROSS_CORRELATION);
 
             using (var dataDesc = new TensorDescriptor())
             using (var weightDesc = new FilterDescriptor())
