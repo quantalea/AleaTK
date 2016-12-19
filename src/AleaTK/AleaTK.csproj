@@ -63,6 +63,7 @@
     <Compile Include="Layout.cs" />
     <Compile Include="Library.cs" />
     <Compile Include="ML\Batcher.cs" />
+    <Compile Include="ML\CPUBatcher.cs" />
     <Compile Include="ML\Differentiable.cs" />
     <Compile Include="ML\Executor.cs" />
     <Compile Include="ML\Library.cs" />
